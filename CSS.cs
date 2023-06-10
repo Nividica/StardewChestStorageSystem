@@ -29,7 +29,6 @@ namespace ChestStorageSystem
             // Listen for events
             smapi.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             smapi.Events.Input.ButtonPressed += this.OnButtonPressed;
-
         }
 
         public void ResetConfig()
@@ -61,9 +60,9 @@ namespace ChestStorageSystem
             }
 
             // Does the user want to open the UI?
-            if (e.Button == Config.OpenUIKey)
+            if (e.Button == Config.OpenUIKey && Context.IsPlayerFree && Game1.activeClickableMenu is null)
             {
-                // Todo
+                Game1.activeClickableMenu = new Menus.AggregationMenu();
             }
         }
 
