@@ -6,7 +6,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
-using StardewModdingAPI;
 using StardewObject = StardewValley.Object;
 
 namespace ChestStorageSystem.Storage
@@ -103,14 +102,6 @@ namespace ChestStorageSystem.Storage
             }
         }
 
-        private enum SearchMode
-        {
-            None = 0,
-            NameDesc = 1,
-            ItemCategory = 2,
-            FoodBuff = 3,
-        }
-
         private static Item AddItemToChest(Chest chest, Item itemToAdd)
         {
             if (itemToAdd is null)
@@ -135,106 +126,6 @@ namespace ChestStorageSystem.Storage
             }
 
             return itemToAdd;
-        }
-
-        private static bool ItemMatchesSearchTerm(Item item, string term, SearchMode mode)
-        {
-            if (mode == SearchMode.None || term is null)
-            {
-                // Not searching, all items match
-                return true;
-            }
-            else if (item is null)
-            {
-                // No item to check
-                return false;
-            }
-
-            switch (mode)
-            {
-                // Search in the item &| description
-                case SearchMode.NameDesc:
-                    if (item.DisplayName.Contains(term, StringComparison.CurrentCultureIgnoreCase))
-                    {
-                        return true;
-                    }
-
-                    if (item.getDescription() is string desc && desc.Contains(term, StringComparison.CurrentCultureIgnoreCase))
-                    {
-                        return true;
-                    }
-
-                    return false;
-
-                // Search in the item category, with support for no-category items
-                case SearchMode.ItemCategory:
-                    string itemCategory = item.getCategoryName();
-                    bool noCategory = String.IsNullOrEmpty(itemCategory);
-                    if (term == String.Empty)
-                    {
-                        return noCategory;
-                    }
-                    else
-                    {
-                        return !noCategory && itemCategory.Contains(term, StringComparison.CurrentCultureIgnoreCase);
-                    }
-
-                case SearchMode.FoodBuff:
-                    // -300, magic number.
-                    // Some items have 7+ info fields, but only those with an edibility != -300 is the 7th field food buffs.
-                    if (term.Length == 0 || item is not StardewObject itemObject || itemObject.Edibility == -300)
-                    {
-                        return false;
-                    };
-
-                    // ToDo: This seems expensive, probably needs a cache...
-                    try
-                    {
-                        // Is there any info for this item?
-                        Game1.objectInformation.TryGetValue(itemObject.ParentSheetIndex, out string itemInfo);
-                        if (string.IsNullOrEmpty(itemInfo))
-                        {
-                            return false;
-                        }
-
-                        // Does the item have baseline buff powers?
-                        string[] infoFields = itemInfo.Split('/');
-                        if (infoFields.Length <= 7)
-                        {
-                            return false;
-                        }
-
-                        // Ask the item to apply any special buffs
-                        string[] buffPowers = itemObject.ModifyItemBuffs(infoFields[7].Split(' '));
-
-                        // Search every buff power > 0
-                        for (int buffId = 0; buffId < buffPowers.Length; buffId++)
-                        {
-                            string power = buffPowers[buffId];
-                            if (power == "0") continue;
-
-                            // Could likely combine all powers and store keyed by parentsheetindex for cache
-                            string buffDescription = Game1.content.LoadString("Strings\\UI:ItemHover_Buff" + buffId, "");
-                            if (string.IsNullOrEmpty(buffDescription))
-                            {
-                                continue;
-                            }
-                            if (buffDescription.Contains(term, StringComparison.CurrentCultureIgnoreCase))
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        CSS.Log($"Failed on {item.DisplayName}", LogLevel.Warn);
-                        CSS.Log(e.ToString(), LogLevel.Error);
-                    }
-
-                    return false;
-
-                default: return false;
-            }
         }
 
         /// <summary>
@@ -380,38 +271,9 @@ namespace ChestStorageSystem.Storage
 
         public void SearchAndSort()
         {
-            // Determine the search mode
-            SearchMode searchMode = SearchMode.None;
-            string searchTerm = this.itemSearchTerm;
-            if (!String.IsNullOrEmpty(searchTerm))
-            {
-                if (searchTerm.StartsWith("#"))
-                {
-                    searchTerm = searchTerm[1..];
-                    searchMode = SearchMode.ItemCategory;
-                }
-                else if (searchTerm.StartsWith("+"))
-                {
-                    searchTerm = searchTerm[1..];
-                    searchMode = SearchMode.FoodBuff;
-                }
-                else
-                {
-                    searchMode = SearchMode.NameDesc;
-                }
-            }
-
-            if (searchMode == SearchMode.None)
-            {
-                this.filteredSlots = this.externalSlots;
-            }
-            else
-            {
-                // Add slots that match the search term
-                this.filteredSlots = this.externalSlots
-                    .Where((slot) => ItemMatchesSearchTerm(slot.GetItem(), searchTerm, searchMode))
-                    .ToList();
-            }
+            // Search
+            IEnumerable<MappedSlot> searchResults = ItemSearch.Search(this.externalSlots, this.itemSearchTerm, (slot) => slot.GetItem());
+            this.filteredSlots = (searchResults == this.externalSlots) ? this.externalSlots : searchResults.ToList();
 
             // Then sort
             this.filteredSlots.Sort();
