@@ -314,7 +314,7 @@ namespace ChestStorageSystem.Menus
             // Draw user search
             this.searchBox.Draw();
             this.searchTextbox.Draw(batch);
-            if (String.IsNullOrEmpty(this.searchTextbox.Text))
+            if (string.IsNullOrEmpty(this.searchTextbox.Text))
             {
                 batch.DrawString(Game1.smallFont, "Search...", new Vector2(this.searchTextbox.X + 24, this.searchTextbox.Y + 8), Color.Gray);
             }
@@ -411,8 +411,10 @@ namespace ChestStorageSystem.Menus
                 this.hoverTitle = "Search Selected Category";
                 this.hoverText = "Searches item names and descriptions"
                     + "\nRight-click to clear"
-                    + "\nThe # prefix will search by Item Category. E.g: \"#forage\""
-                    + "\nThe + prefix will search by Food Buff. E.g: \"+luck\"";
+                    + "\n-- Advanced Search Modes --"
+                    + "\n> The # prefix searches item category. E.g: \"#forage\""
+                    + "\n> The + prefix searches food buff names. E.g: \"+luck\""
+                    + "\n> The =(equals) prefix and 1-3 searches quality. E.g: \"=2\"";
                 return;
             }
 

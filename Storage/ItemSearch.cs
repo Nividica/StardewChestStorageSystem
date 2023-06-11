@@ -19,6 +19,7 @@ namespace ChestStorageSystem.Storage
             NameDesc = 1,
             ItemCategory = 2,
             FoodBuff = 3,
+            ItemQuality = 4,
         }
 
         private const int StardewMagicNumber_Inedible = -300;
@@ -70,6 +71,10 @@ namespace ChestStorageSystem.Storage
             {
                 mode = Mode.FoodBuff;
             }
+            else if (query.StartsWith("="))
+            {
+                mode = Mode.ItemQuality;
+            }
             else
             {
                 mode = Mode.NameDesc;
@@ -100,7 +105,7 @@ namespace ChestStorageSystem.Storage
         /// <returns></returns>
         public static bool DoesItemMatch(Item item, string term, Mode mode)
         {
-            if (mode == Mode.None || string.IsNullOrEmpty(term))
+            if (mode == Mode.None || term is null)
             {
                 // Not searching, all items match
                 return true;
@@ -119,6 +124,8 @@ namespace ChestStorageSystem.Storage
                 Mode.ItemCategory => MatchCategory(item, term),
                 // Search the items food buffs
                 Mode.FoodBuff => MatchFoodBuff(item, term),
+                // Compare item quality
+                Mode.ItemQuality => MatchQuality(item, term),
                 // Unsupported mode
                 _ => false,
             };
@@ -245,6 +252,29 @@ namespace ChestStorageSystem.Storage
 
             // Return a new array in-case the item mutates it during ModifyItemBuffs()
             return buffPowers is not null ? (string[])buffPowers.Clone() : null;
+        }
+
+        private static bool MatchQuality(Item item, string term)
+        {
+            // Only objects have quality
+            if (item is not StardewObject itemObject)
+            {
+                return false;
+            }
+
+            // Default to no quality
+            if (!int.TryParse(term, out int nTerm))
+            {
+                nTerm = 0;
+            }
+            else if (nTerm > 2)
+            {
+                // I don't know why, but 3 was skipped
+                // 0 = No stars, 1 = Silver, 2 = Gold, 4 = Iridium
+                nTerm++;
+            }
+
+            return itemObject.Quality == nTerm;
         }
 
     }
