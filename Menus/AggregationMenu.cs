@@ -28,7 +28,7 @@ namespace ChestStorageSystem.Menus
         /// Remembers what category was selected after the UI is closed
         /// </summary>
         [InstancedStatic]
-        private static string categoryRecall = null;
+        private static string CategoryRecall = null;
 
         private static Rectangle SunsetBgTextureCoords = new(639, 858, 1, 144);
         private static Rectangle RainBgTextureCoords = new(640, 858, 1, 184);
@@ -53,7 +53,7 @@ namespace ChestStorageSystem.Menus
             };
         }
 
-        private static OptionsDropDown BuildCategoryDropdown(List<StorageOrigin> storages)
+        private static Dropdown<string> BuildCategoryDropdown(List<StorageOrigin> storages)
         {
             HashSet<string> categories = new(
                 // Get the categories from the storages
@@ -62,23 +62,18 @@ namespace ChestStorageSystem.Menus
                 .Prepend(null)
             );
 
-            OptionsDropDown categoryDropdown = new(null, -int.MaxValue, 0, 0)
-            {
-                dropDownOptions = categories.ToList(),
-                dropDownDisplayOptions = categories.Select((catKey) => string.IsNullOrEmpty(catKey) ? "All Categories" : (catKey.Length >= 26 ? catKey[..26] : catKey)).ToList(),
-            };
+            var items = categories
+                .Select((catKey) => new Dropdown<string>.DropdownItem()
+                {
+                    name = string.IsNullOrEmpty(catKey) ? "All Categories" : (catKey.Length >= 26 ? catKey[..26] : catKey),
+                    value = catKey
+                })
+                .ToList();
 
             // Did the user have a previous category set?
-            if (categoryRecall is not null)
-            {
-                int catIdx = categoryDropdown.dropDownOptions.IndexOf(categoryRecall);
-                if (catIdx != -1)
-                {
-                    categoryDropdown.selectedOption = catIdx;
-                }
-            }
+            int selectedIdx = Math.Max(0, items.FindIndex((item) => item.value == CategoryRecall));
 
-            return categoryDropdown;
+            return new Dropdown<string>(new Rectangle(), items, selectedIdx);
         }
 
         private readonly InventoryMenu playerInventoryMenu;
@@ -91,13 +86,7 @@ namespace ChestStorageSystem.Menus
         /// <summary>
         /// Allows the user to scrope the aggregate to a single category
         /// </summary>
-        private readonly OptionsDropDown categoryDropdown;
-
-        /// <summary>
-        /// Private field "clicked" of the OptionsDropDown class
-        /// </summary>
-        private readonly FieldInfo optionsDropDownField_Clicked = typeof(OptionsDropDown)
-            .GetField("clicked", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        private readonly Dropdown<string> categoryDropdown;
 
         /// <summary>
         /// Allows the user to search for items
@@ -119,10 +108,6 @@ namespace ChestStorageSystem.Menus
         /// </summary>
         private TimeOfDay timeOfDay = TimeOfDay.Day;
 
-        /// <summary>
-        /// Ensures the same click that opened the dropdown doesn't also close it
-        /// </summary>
-        private bool categoryDropdownHeldOpen = false;
 
         /// <summary>
         /// Aggregated inventories graphical menu
@@ -253,22 +238,30 @@ namespace ChestStorageSystem.Menus
                 this.scrollbar.bounds.X = Game1.uiViewport.Width - this.scrollbar.bounds.Width;
                 this.scrollbar.RecalculatePositions();
             }
-            // Attach to the change event
-            // Note: Since I have no reason to ever detach, I am using a simple lambda here
-            this.scrollbar.OnValueChanged += (sender, args) =>
-            {
-                this.aggro.SlotShift = args.Value * this.aggroMenuColumnCount;
-                Game1.playSound("shiny4");
-            };
 
             // Capacity Gauge (x3 scale)
             this.capacityGauge = new Gauge(new Rectangle(this.aggroInventoryBox.BorderBounds.X - 36, this.aggroInventoryBox.Bounds.Y, 36, 135));
 
             // Build the aggregation of all storages
-            this.aggro = new StorageAggregator(storages, this.categoryDropdown.dropDownOptions[this.categoryDropdown.selectedOption], null);
+            this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.value, null);
 
             // Create the aggregate menu
-            this.RebuildAggregateMenu();
+            this.aggroMenu = new InventoryMenu(
+                // X, Centered on the page
+                this.aggroInventoryBox.ContentBounds.X,
+                // Y
+                this.aggroInventoryBox.ContentBounds.Y,
+                // Not the default player inventory menu
+                false,
+                // Inventory source is the aggregator
+                this.aggro,
+                // No special highlighting
+                null,
+                // Capacity of the inventory
+                this.aggroMenuRowCount * this.aggroMenuColumnCount,
+                // Number of rows drawn (if it is evenly divisble by capacity!)
+                this.aggroMenuRowCount
+                );
 
             // Calculate the overall bounds
             allBoxes
@@ -278,6 +271,25 @@ namespace ChestStorageSystem.Menus
                 .Deconstruct(out this.xPositionOnScreen, out this.yPositionOnScreen, out this.width, out this.height);
 
             this.populateClickableComponentList();
+
+            // Attach to the change events
+            // Note: Since I have no reason to ever detach, I am using a simple lambda here
+            this.scrollbar.OnValueChanged += (sender, args) =>
+            {
+                this.aggro.SlotShift = args.Value * this.aggroMenuColumnCount;
+                Game1.playSound("shiny4");
+            };
+            this.categoryDropdown.OnSelectedItemChanged += (sender, args) =>
+            {
+                // Remember the farmers selection
+                CategoryRecall = args.Item.value;
+
+                // Only show storages from this category in the aggregator
+                this.aggro.ApplyStorageCategoryFilter(CategoryRecall);
+
+                // Reset scroll
+                this.aggro.SlotShift = 0;
+            };
 
             //snapToDefaultClickableComponent();
         }
@@ -321,7 +333,7 @@ namespace ChestStorageSystem.Menus
 
             // Draw category dropdown
             this.dropDownBox.Draw();
-            this.categoryDropdown.draw(batch, 0, 0);
+            this.categoryDropdown.Draw(batch);
 
             if (this.hoveredItem is not null)
             {
@@ -397,32 +409,8 @@ namespace ChestStorageSystem.Menus
 
             this.scrollbar.PerformHoverAction(x, y);
 
-            if (this.capacityGauge.Bounds.Contains(x, y))
+            if (this.categoryDropdown.PerformHoverAction(x, y))
             {
-                this.hoverTitle = "Storage Space";
-                int freeSlots = this.aggro.TotalSlots - this.aggro.OccupiedSlots;
-                double utilization = Math.Round((1f - this.capacityGauge.Value) * 1000f) / 10.0;
-                this.hoverText = $"Capacity: {this.aggro.TotalSlots} Stacks\nEmpty Slots: {freeSlots}\nUtilization: {utilization}%";
-                return;
-            }
-
-            if (this.searchBox.ContentBounds.Contains(x, y))
-            {
-                this.hoverTitle = "Search Selected Category";
-                this.hoverText = "Searches item names and descriptions"
-                    + "\nRight-click to clear"
-                    + "\n-- Advanced Search Modes --"
-                    + "\n> The # prefix searches item category. E.g: \"#forage\""
-                    + "\n> The + prefix searches food buff names. E.g: \"+luck\""
-                    + "\n> The =(equals) prefix and 1-3 searches quality. E.g: \"=2\"";
-                return;
-            }
-
-            bool ddOpen = this.IsCategoryDropdownOpen();
-            // Change the highlighed option in the dropdown
-            if (ddOpen && this.categoryDropdown.dropDownBounds.Contains(x, y))
-            {
-                this.categoryDropdown.leftClickHeld(x, y);
                 return;
             }
 
@@ -440,12 +428,39 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
-            if (!ddOpen && this.dropDownBox.ContentBounds.Contains(x, y))
+            #region User Tips
+
+            if (this.capacityGauge.Bounds.Contains(x, y))
+            {
+                this.hoverTitle = "Storage Space";
+                int freeSlots = this.aggro.TotalSlots - this.aggro.OccupiedSlots;
+                double utilization = Math.Round((1f - this.capacityGauge.Value) * 1000f) / 10.0;
+                this.hoverText = $"Capacity: {this.aggro.TotalSlots} Stacks\nEmpty Slots: {freeSlots}\nUtilization: {utilization}%";
+                return;
+            }
+
+            if (this.searchBox.ContentBounds.Contains(x, y))
+            {
+                this.hoverTitle = "Search Selected Category";
+                this.hoverText = "Searches item names and descriptions"
+                    + "\nRight-click to clear"
+                    + "\n-- Advanced Search Modes --"
+                    + "\n> The # prefix searches item category. E.g: \"#forage\""
+                    + "\n> The + prefix searches food buff names. E.g: \"+luck\""
+                    + "\n> The =(equals) prefix and 1-3 searches quality. E.g: \"=2\""
+                    + "\n\nSeparate multiple terms by a space to combine their results."
+                    + "\n\"#fish =2 ed\" Matches Category:Fish, Quality:Gold, and Text:\"ed\"";
+                return;
+            }
+
+            if (!this.categoryDropdown.IsOpen && this.dropDownBox.ContentBounds.Contains(x, y))
             {
                 this.hoverTitle = "Category Selection";
                 this.hoverText = "Select which grouping of chests you would like to interact with.";
                 return;
             }
+
+            #endregion
 
         }
 
@@ -463,20 +478,8 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
-            if (this.IsCategoryDropdownOpen() && this.categoryDropdown.dropDownBounds.Contains(x, y))
+            if (this.categoryDropdown.ReceiveLeftClick(x, y))
             {
-                // Select option
-                this.categoryDropdown.leftClickHeld(x, y);
-
-                return;
-            }
-
-            if (this.categoryDropdown.bounds.Contains(x, y))
-            {
-                // Open the dropdown
-                this.categoryDropdown.receiveLeftClick(x, y);
-                this.categoryDropdownHeldOpen = true;
-
                 return;
             }
 
@@ -523,34 +526,7 @@ namespace ChestStorageSystem.Menus
 
         public override void releaseLeftClick(int x, int y)
         {
-            if (!this.categoryDropdownHeldOpen && this.IsCategoryDropdownOpen())
-            {
-                // Is the mouse over the options?
-                // Did the selected category change?
-                if (this.categoryDropdown.dropDownBounds.Contains(x, y) && this.categoryDropdown.selectedOption != this.categoryDropdown.startingSelected)
-                {
-                    // Set the current selection as the starting (so that leftClickReleased resets to it) 
-                    this.categoryDropdown.startingSelected = this.categoryDropdown.selectedOption;
-
-                    // Get the category name
-                    string category = this.categoryDropdown.dropDownOptions[this.categoryDropdown.selectedOption];
-
-                    // Remember the farmers selection
-                    categoryRecall = category;
-
-                    // Only show storages from this category in the aggregator
-                    this.aggro.ApplyStorageCategoryFilter(category);
-
-                    // Update the inventory menu
-                    this.RebuildAggregateMenu();
-                }
-
-                // Close the dropdown (fake coords to prevent dirtying Game options)
-                this.categoryDropdown.leftClickReleased(-1, -1);
-
-            }
-
-            this.categoryDropdownHeldOpen = false;
+            this.categoryDropdown.ReleaseLeftClick(x, y);
 
             this.scrollbar.ReleaseLeftClick();
         }
@@ -630,30 +606,6 @@ namespace ChestStorageSystem.Menus
             int numberOfItemRows = (int)Math.Ceiling((this.aggro.LastSlotIndexWithItem() + 1) / (float)this.aggroMenuColumnCount);
             int numberOfOverflowRows = Math.Max(0, numberOfItemRows - this.aggroMenuRowCount);
             this.scrollbar.Steps = numberOfOverflowRows;
-        }
-
-        private void RebuildAggregateMenu()
-        {
-            // Reset scroll
-            this.aggro.SlotShift = 0;
-
-            // Build the menu
-            this.aggroMenu = new InventoryMenu(
-                // X, Centered on the page
-                this.aggroInventoryBox.ContentBounds.X,
-                // Y
-                this.aggroInventoryBox.ContentBounds.Y,
-                // Not the default player inventory menu
-                false,
-                // Inventory source is the aggregator
-                this.aggro,
-                // No special highlighting
-                null,
-                // Capacity of the inventory
-                this.aggroMenuRowCount * this.aggroMenuColumnCount,
-                // Number of rows drawn (if it is evenly divisble by capacity!)
-                this.aggroMenuRowCount
-                );
         }
 
         /// <summary>
@@ -761,15 +713,7 @@ namespace ChestStorageSystem.Menus
             return extractedItem;
         }
 
-        private bool IsCategoryDropdownOpen()
-        {
-            if (optionsDropDownField_Clicked is null || this.categoryDropdown is null)
-            {
-                return false;
-            }
-            // Reflect on the dropdown to determine if it is open
-            return (bool)optionsDropDownField_Clicked.GetValue(this.categoryDropdown);
-        }
+
 
     }
 }
