@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Netcode;
+using static ChestStorageSystem.Storage.ItemSearch;
 
 
 namespace ChestStorageSystem.Storage
@@ -33,65 +34,87 @@ namespace ChestStorageSystem.Storage
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="source"></param>
-        /// <param name="query"></param>
+        /// <param name="queryString"></param>
         /// <param name="getItem"></param>
         /// <returns></returns>
-        public static IEnumerable<T> Search<T>(IEnumerable<T> source, string query, Func<T, Item> getItem)
+        public static IEnumerable<T> Search<T>(IEnumerable<T> source, string queryString, Func<T, Item> getItem)
         {
-            var (term, mode) = ParseSearchQuery(query);
-            if (mode == Mode.None)
+            // Parse the query for terms and modes
+            var predicates = ParseSearchQuery(queryString);
+            if (predicates.Count == 0)
             {
                 return source;
             }
 
-            return source.Where((element) => DoesItemMatch(getItem(element), term, mode));
+            // Apply the search predicates to each item
+            // All must match
+            return source.Where((element) =>
+            {
+                if (getItem(element) is not Item item)
+                {
+                    return false;
+                }
+
+                return predicates.All(
+                    (tm) => DoesItemMatch(item, tm.term, tm.mode)
+                );
+            });
         }
 
         /// <summary>
-        /// Parses the query for the mode and term.
+        /// Parses the query string for the modes and terms.
         ///
         /// If the query is prefixed, like "#", the term is returned without the prefix.
         /// </summary>
-        /// <param name="query"></param>
+        /// <param name="queryString"></param>
         /// <returns></returns>
-        public static (string, Mode) ParseSearchQuery(string query)
+        public static List<(string term, Mode mode)> ParseSearchQuery(string queryString)
         {
-            if (string.IsNullOrEmpty(query))
+            List<(string, Mode)> predicates = new();
+            if (string.IsNullOrEmpty(queryString))
             {
-                return (query, Mode.None);
+                return predicates;
             }
 
-            // Determine the search mode
-            Mode mode;
-            if (query.StartsWith("#"))
+            // Split the query
+            string[] queries = queryString.Split(' ');
+
+            foreach (string query in queries)
             {
-                mode = Mode.ItemCategory;
-            }
-            else if (query.StartsWith("+"))
-            {
-                mode = Mode.FoodBuff;
-            }
-            else if (query.StartsWith("="))
-            {
-                mode = Mode.ItemQuality;
-            }
-            else
-            {
-                mode = Mode.NameDesc;
+                // Determine the search mode
+                Mode mode;
+                if (query.StartsWith("#"))
+                {
+                    mode = Mode.ItemCategory;
+                }
+                else if (query.StartsWith("+"))
+                {
+                    mode = Mode.FoodBuff;
+                }
+                else if (query.StartsWith("="))
+                {
+                    mode = Mode.ItemQuality;
+                }
+                else
+                {
+                    mode = Mode.NameDesc;
+                }
+
+                // Prefixed?
+                string term;
+                if (mode > Mode.NameDesc)
+                {
+                    term = query[1..];
+                }
+                else
+                {
+                    term = query;
+                }
+
+                predicates.Add((term, mode));
             }
 
-            // Prefixed?
-            string term;
-            if (mode > Mode.NameDesc)
-            {
-                term = query[1..];
-            }
-            else
-            {
-                term = query;
-            }
-
-            return (term, mode);
+            return predicates;
         }
 
         /// <summary>
