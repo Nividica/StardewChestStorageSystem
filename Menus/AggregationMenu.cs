@@ -34,6 +34,7 @@ namespace ChestStorageSystem.Menus
         private static Rectangle RainBgTextureCoords = new(640, 858, 1, 184);
         private static Rectangle StarsTextureCoords = new(0, 1453, 640, 195);
         private static Rectangle QuickStackButtonTextureCoords = new(103, 469, 16, 16);
+        private static Rectangle QuestionCircleTextureCoords = new(240, 192, 16, 16);
 
         private static InventoryMenu BuildPlayerMenu(int x, int y, int rows, int cols)
         {
@@ -127,10 +128,12 @@ namespace ChestStorageSystem.Menus
 
         private readonly BorderBox playerInventoryBox = new();
         private readonly BorderBox aggroInventoryBox = new();
-        private readonly BorderBox dropDownBox = new();
+        private readonly BorderBox categoryDropDownBox = new();
         private readonly BorderBox searchBox = new();
 
         private ClickableTextureComponent quickStackButton;
+        private Vector2 searchTooltipIconPosition;
+        private Vector2 categoryTooltipIconPosition;
 
         public AggregationMenu() : base(new List<Item>(), false, false, null, null, null)
         {
@@ -142,7 +145,7 @@ namespace ChestStorageSystem.Menus
              (int)Math.Ceiling(Game1.player.MaxItems / (float)playerInventoryCols);
 
 
-            List<BorderBox> allBoxes = new() { this.dropDownBox, this.aggroInventoryBox, this.playerInventoryBox, this.searchBox };
+            List<BorderBox> allBoxes = new() { this.categoryDropDownBox, this.aggroInventoryBox, this.playerInventoryBox, this.searchBox };
 
             bool smallRes = Game1.uiViewport.Height <= 800;
             int gap = smallRes ? 0 : 32;
@@ -180,8 +183,8 @@ namespace ChestStorageSystem.Menus
 
             // Bounds of the dropdown window
             int dropdownImplicitRightMargin = 8;
-            this.dropDownBox.Padding = 0;
-            this.dropDownBox
+            this.categoryDropDownBox.Padding = 0;
+            this.categoryDropDownBox
                 .AligntTopTo(gap)
                 .SetContentHeight(this.categoryDropdown.bounds.Height)
                 .SetContentWidth(this.categoryDropdown.bounds.Width - dropdownImplicitRightMargin);
@@ -194,7 +197,7 @@ namespace ChestStorageSystem.Menus
                 .SetContentWidth(Game1.tileSize * this.aggroMenuColumnCount)
                 .CenterHorizontally(centerX)
                 // Overlap borders of the aggro and dropdown window
-                .SetY(this.dropDownBox.BorderBounds.Bottom)
+                .SetY(this.categoryDropDownBox.BorderBounds.Bottom)
                 .ExpandDownTo(this.playerInventoryBox.BorderBounds.Top - gap);
 
 
@@ -212,10 +215,13 @@ namespace ChestStorageSystem.Menus
 
             // Reposition the dropdown window (align right)
             // and move the dropdown into the window
-            this.dropDownBox.RightAlignWith(this.aggroInventoryBox);
-            this.categoryDropdown.bounds.X = this.dropDownBox.Bounds.X;
-            this.categoryDropdown.bounds.Y = this.dropDownBox.Bounds.Y;
+            this.categoryDropDownBox.RightAlignWith(this.aggroInventoryBox);
+            this.categoryDropdown.bounds.X = this.categoryDropDownBox.Bounds.X;
+            this.categoryDropdown.bounds.Y = this.categoryDropDownBox.Bounds.Y;
             this.categoryDropdown.RecalculateBounds();
+
+            // Tooltip icon for the category dropdown
+            this.categoryTooltipIconPosition = new Vector2(this.categoryDropDownBox.BorderBounds.Right - 16, this.categoryDropDownBox.BorderBounds.Y);
 
             // Bounds of the user search textbox
             this.searchBox.Padding = 0;
@@ -235,6 +241,9 @@ namespace ChestStorageSystem.Menus
                 Text = "",
                 Selected = true,
             };
+
+            // Tooltip icon for the searchbox
+            this.searchTooltipIconPosition = new Vector2(this.searchBox.BorderBounds.Right - 16, this.searchBox.BorderBounds.Y);
 
             // Create the scrollbar
             this.scrollbar = new ScrollBar(
@@ -349,14 +358,36 @@ namespace ChestStorageSystem.Menus
             }
 
             // Draw category dropdown
-            this.dropDownBox.Draw();
+            this.categoryDropDownBox.Draw();
             this.categoryDropdown.Draw(batch);
+
+            // Tooltip Icons
+            batch.Draw(Game1.mouseCursors,
+                this.searchTooltipIconPosition,
+                QuestionCircleTextureCoords,
+                Color.BurlyWood,
+                0f,
+                Vector2.Zero,
+                1f,
+                SpriteEffects.None,
+                1f
+            );
+            batch.Draw(Game1.mouseCursors,
+                this.categoryTooltipIconPosition,
+                QuestionCircleTextureCoords,
+                Color.BurlyWood,
+                0f,
+                Vector2.Zero,
+                1f,
+                SpriteEffects.None,
+                1f
+            );
 
             if (this.hoveredItem is not null)
             {
                 drawToolTip(batch,
                     hoverTitle: this.hoveredItem.DisplayName,
-                    hoverText: this.hoveredItem.getDescription(),
+                    hoverText: this.hoveredItem.getDescription() + $"\n\nYou have X of these in {this.categoryDropdown.SelectedItem.Name}",
                     hoveredItem: this.hoveredItem,
                     heldItem: this.heldItem is not null
                 );
@@ -474,7 +505,11 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
-            if (this.searchBox.ContentBounds.Contains(x, y))
+            Rectangle iconBounds = QuestionCircleTextureCoords;
+
+            iconBounds.X = (int)this.searchTooltipIconPosition.X;
+            iconBounds.Y = (int)this.searchTooltipIconPosition.Y;
+            if (iconBounds.Contains(x, y))
             {
                 this.hoverTitle = "Search Selected Category";
                 this.hoverText = "Searches item names and descriptions"
@@ -488,7 +523,10 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
-            if (!this.categoryDropdown.IsOpen && this.dropDownBox.ContentBounds.Contains(x, y))
+
+            iconBounds.X = (int)this.categoryTooltipIconPosition.X;
+            iconBounds.Y = (int)this.categoryTooltipIconPosition.Y;
+            if (iconBounds.Contains(x, y))
             {
                 this.hoverTitle = "Category Selection";
                 this.hoverText = "Select which grouping of chests you would like to interact with.";
