@@ -63,6 +63,7 @@ namespace ChestStorageSystem
             if (e.Button == Config.OpenUIKey && Context.IsPlayerFree && Game1.activeClickableMenu is null)
             {
                 Game1.activeClickableMenu = new Menus.AggregationMenu();
+                //Game1.activeClickableMenu = new Menus.TextureExplorerMenu();
             }
         }
 

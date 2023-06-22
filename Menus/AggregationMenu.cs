@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewModdingAPI;
@@ -63,15 +63,14 @@ namespace ChestStorageSystem.Menus
             );
 
             var items = categories
-                .Select((catKey) => new Dropdown<string>.DropdownItem()
-                {
-                    name = string.IsNullOrEmpty(catKey) ? "All Categories" : (catKey.Length >= 26 ? catKey[..26] : catKey),
-                    value = catKey
-                })
+                .Select((catKey) => new DropdownItem<string>(
+                    string.IsNullOrEmpty(catKey) ? "All Categories" : (catKey.Length >= 26 ? catKey[..26] : catKey),
+                    catKey
+                ))
                 .ToList();
 
             // Did the user have a previous category set?
-            int selectedIdx = Math.Max(0, items.FindIndex((item) => item.value == CategoryRecall));
+            int selectedIdx = Math.Max(0, items.FindIndex((item) => item.Value == CategoryRecall));
 
             return new Dropdown<string>(new Rectangle(), items, selectedIdx);
         }
@@ -243,7 +242,7 @@ namespace ChestStorageSystem.Menus
             this.capacityGauge = new Gauge(new Rectangle(this.aggroInventoryBox.BorderBounds.X - 36, this.aggroInventoryBox.Bounds.Y, 36, 135));
 
             // Build the aggregation of all storages
-            this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.value, null);
+            this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.Value, null);
 
             // Create the aggregate menu
             this.aggroMenu = new InventoryMenu(
@@ -282,7 +281,7 @@ namespace ChestStorageSystem.Menus
             this.categoryDropdown.OnSelectedItemChanged += (sender, args) =>
             {
                 // Remember the farmers selection
-                CategoryRecall = args.Item.value;
+                CategoryRecall = args.Item.Value;
 
                 // Only show storages from this category in the aggregator
                 this.aggro.ApplyStorageCategoryFilter(CategoryRecall);
@@ -560,6 +559,10 @@ namespace ChestStorageSystem.Menus
 
         public override void receiveScrollWheelAction(int direction)
         {
+            if (this.categoryDropdown.ReceiveScrollWheelAction(direction))
+            {
+                return;
+            }
             this.scrollbar.Value -= Math.Sign(direction);
         }
 
