@@ -13,6 +13,24 @@ namespace ChestStorageSystem.Storage
     public class StorageAggregator : IList<Item>
     {
         /// <summary>
+        /// A *chest* will be targeted if it contains an item matching these rules
+        /// </summary>
+        [Flags]
+        public enum CanStackRules
+        {
+            #pragma warning disable format
+            ItemOnly                = 0,
+            Default                 = ~0,
+            MaxStackGreaterThanOne  = 0b001,
+            MatchingQuality         = 0b010,
+            MatchingColor           = 0b100,
+            IgnoreStackSize         = Default & ~MaxStackGreaterThanOne,
+            IgnoreQuality           = Default & ~MatchingQuality,
+            IgnoreColor             = Default & ~MatchingColor,
+            #pragma warning restore format
+        }
+
+        /// <summary>
         /// We never want to store references to the actual Items, as they could be moved or removed from the source inventory,
         /// but we would still be referencing them as-if they are still where we first saw it.
         /// 
@@ -134,27 +152,56 @@ namespace ChestStorageSystem.Storage
         /// <param name="source"></param>
         /// <param name="target"></param>
         /// <returns></returns>
-        private static bool CanStackWithIgnoringStackSizes(Item source, Item target)
+        private static bool CanStackWith(Item source, Item target, CanStackRules rules)
         {
-            if (source is StardewObject sourceObj && target is StardewObject targetObj)
+            if (source is not StardewObject sourceObj || target is not StardewObject targetObj)
             {
-                if (targetObj.orderData.Value != sourceObj.orderData.Value)
-                {
-                    return false;
-                }
-
-                if ((source is ColoredObject sourceColor && target is ColoredObject targetColor) && !sourceColor.color.Value.Equals(targetColor.color.Value))
-                {
-                    return false;
-                }
-
-                if ((sourceObj.ParentSheetIndex == targetObj.ParentSheetIndex) && (sourceObj.bigCraftable.Value == targetObj.bigCraftable.Value) && (sourceObj.Quality == targetObj.Quality))
-                {
-                    return source.Name.Equals(target.Name);
-                }
+                return false;
             }
 
-            return false;
+            // Check sheet index
+            if (sourceObj.ParentSheetIndex != targetObj.ParentSheetIndex)
+            {
+                return false;
+            }
+
+            // Check is-bigCraftable
+            if (sourceObj.bigCraftable.Value != targetObj.bigCraftable.Value)
+            {
+                return false;
+            }
+
+            // Check name
+            if (!source.Name.Equals(target.Name))
+            {
+                return false;
+            }
+
+            // Check order data
+            if (targetObj.orderData.Value != sourceObj.orderData.Value)
+            {
+                return false;
+            }
+
+            // Check quality
+            if (rules.HasFlag(CanStackRules.MatchingQuality) && (sourceObj.Quality != targetObj.Quality))
+            {
+                return false;
+            }
+
+            // Check size
+            if (rules.HasFlag(CanStackRules.MaxStackGreaterThanOne) && (source.maximumStackSize() > 1 && target.maximumStackSize() > 1))
+            {
+                return false;
+            }
+
+            // Check color
+            if (rules.HasFlag(CanStackRules.MatchingColor) && ((source is ColoredObject sourceColor && target is ColoredObject targetColor) && !sourceColor.color.Value.Equals(targetColor.color.Value)))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -319,10 +366,11 @@ namespace ChestStorageSystem.Storage
                 return null;
             }
 
+            // Try to merge with the prefered slot
             if (preferedSlotIdx >= 0 && (preferedSlotIdx + this.SlotShift) < this.Count)
             {
                 MappedSlot preferedSlot = this.filteredSlots[preferedSlotIdx + this.SlotShift];
-                if (CanStackWithIgnoringStackSizes(preferedSlot.GetItem(), incomingItem))
+                if (CanStackWith(preferedSlot.GetItem(), incomingItem, CanStackRules.IgnoreStackSize))
                 {
                     incomingItem = AddItemToChest(this.storages[preferedSlot.StorageIndex].Chest, incomingItem);
 
@@ -334,29 +382,15 @@ namespace ChestStorageSystem.Storage
                 }
             }
 
-            // Search each inventory for a like-item
-            foreach (StorageOrigin storage in this.filteredStorages)
+            // Try to merge with existing items
+            incomingItem = this.StackWithExisting(incomingItem, CanStackRules.ItemOnly);
+            if (incomingItem is null)
             {
-                foreach (Item item in storage.Chest.items)
-                {
-                    // If one is found, target that inventory
-                    if (CanStackWithIgnoringStackSizes(incomingItem, item))
-                    {
-                        incomingItem = AddItemToChest(storage.Chest, incomingItem);
-
-                        // If fully consumed, done, return null
-                        if (incomingItem is null)
-                        {
-                            return null;
-                        }
-
-                        // Stop searching this inventory
-                        break;
-                    }
-                }
+                // If fully consumed, done, return null
+                return null;
             }
 
-            // If not fully consumed, attempt to add to any inventory
+            // Attempt to add to any inventory
             foreach (StorageOrigin storage in this.filteredStorages)
             {
                 incomingItem = AddItemToChest(storage.Chest, incomingItem);
@@ -383,6 +417,34 @@ namespace ChestStorageSystem.Storage
             }
 
             return -1;
+        }
+
+        public Item StackWithExisting(Item incomingItem, CanStackRules rules)
+        {
+            // Search each inventory for a like-item
+            foreach (StorageOrigin storage in this.filteredStorages)
+            {
+                foreach (Item item in storage.Chest.items)
+                {
+                    if (CanStackWith(incomingItem, item, rules))
+                    {
+                        // If one is found, target that inventory
+                        incomingItem = AddItemToChest(storage.Chest, incomingItem);
+
+                        // If fully consumed, done, return null
+                        if (incomingItem is null)
+                        {
+                            return null;
+                        }
+
+                        // Stop searching this inventory
+                        break;
+                    }
+                }
+            }
+
+            // Not fully consumed, return any remaining
+            return incomingItem;
         }
 
         public void ValidateAndUpdate(GameTime time)

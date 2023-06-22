@@ -1,4 +1,4 @@
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewModdingAPI;
@@ -33,6 +33,7 @@ namespace ChestStorageSystem.Menus
         private static Rectangle SunsetBgTextureCoords = new(639, 858, 1, 144);
         private static Rectangle RainBgTextureCoords = new(640, 858, 1, 184);
         private static Rectangle StarsTextureCoords = new(0, 1453, 640, 195);
+        private static Rectangle QuickStackButtonTextureCoords = new(103, 469, 16, 16);
 
         private static InventoryMenu BuildPlayerMenu(int x, int y, int rows, int cols)
         {
@@ -75,6 +76,11 @@ namespace ChestStorageSystem.Menus
             return new Dropdown<string>(new Rectangle(), items, selectedIdx);
         }
 
+        private static bool IsShiftHeld()
+        {
+            return Game1.oldKBState.IsKeyDown(Keys.LeftShift) || Game1.oldKBState.IsKeyDown(Keys.RightShift);
+        }
+
         private readonly InventoryMenu playerInventoryMenu;
 
         /// <summary>
@@ -107,7 +113,6 @@ namespace ChestStorageSystem.Menus
         /// </summary>
         private TimeOfDay timeOfDay = TimeOfDay.Day;
 
-
         /// <summary>
         /// Aggregated inventories graphical menu
         /// </summary>
@@ -124,6 +129,8 @@ namespace ChestStorageSystem.Menus
         private readonly BorderBox aggroInventoryBox = new();
         private readonly BorderBox dropDownBox = new();
         private readonly BorderBox searchBox = new();
+
+        private ClickableTextureComponent quickStackButton;
 
         public AggregationMenu() : base(new List<Item>(), false, false, null, null, null)
         {
@@ -158,6 +165,14 @@ namespace ChestStorageSystem.Menus
                 this.playerInventoryBox.ContentBounds.Y,
                 playerInventoryRows,
                 playerInventoryCols
+            );
+
+            // Quickstack button bounds
+            this.quickStackButton = new ClickableTextureComponent(
+                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, 16 * 3, 16 * 3),
+                Game1.mouseCursors,
+                QuickStackButtonTextureCoords,
+                3
             );
 
             // Create category dropdown
@@ -313,6 +328,9 @@ namespace ChestStorageSystem.Menus
             // Draw the player inventory
             this.playerInventoryMenu.draw(batch);
 
+            // Draw quickstack button
+            this.quickStackButton.draw(batch, Color.White, 1f, 0);
+
             // Draw transfering items
             foreach (TransferredItemSprite itemSprite in this._transferredItemSprites)
             {
@@ -336,11 +354,21 @@ namespace ChestStorageSystem.Menus
 
             if (this.hoveredItem is not null)
             {
-                drawToolTip(batch, this.hoveredItem.getDescription(), this.hoveredItem.DisplayName, this.hoveredItem, this.heldItem is not null);
+                drawToolTip(batch,
+                    hoverTitle: this.hoveredItem.DisplayName,
+                    hoverText: this.hoveredItem.getDescription(),
+                    hoveredItem: this.hoveredItem,
+                    heldItem: this.heldItem is not null
+                );
             }
             else if (!string.IsNullOrEmpty(this.hoverText))
             {
-                drawToolTip(batch, this.hoverText, this.hoverTitle, null, this.heldItem is not null);
+                drawToolTip(batch,
+                    hoverTitle: this.hoverTitle,
+                    hoverText: this.hoverText,
+                    hoveredItem: null,
+                    heldItem: this.heldItem is not null
+                );
             }
 
             // Draw the held item
@@ -407,6 +435,7 @@ namespace ChestStorageSystem.Menus
             this.hoverTitle = "";
 
             this.scrollbar.PerformHoverAction(x, y);
+            this.quickStackButton.tryHover(x, y);
 
             if (this.categoryDropdown.PerformHoverAction(x, y))
             {
@@ -428,6 +457,13 @@ namespace ChestStorageSystem.Menus
             }
 
             #region User Tips
+
+            if (this.quickStackButton.containsPoint(x, y))
+            {
+                this.hoverTitle = "Add To Existing Stacks";
+                this.hoverText = "Hold [Shift] to ignore color and quality";
+                return;
+            }
 
             if (this.capacityGauge.Bounds.Contains(x, y))
             {
@@ -488,7 +524,7 @@ namespace ChestStorageSystem.Menus
             }
 
             // If true, try to skip holding the item and directly transfer items between the inventories
-            bool hotSwap = Game1.oldKBState.IsKeyDown(Keys.LeftShift) && !this.invertShiftTransfering;
+            bool hotSwap = IsShiftHeld() && !this.invertShiftTransfering;
 
             if (this.playerInventoryMenu.isWithinBounds(x, y))
             {
@@ -512,7 +548,7 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
-            bool hotSwap = Game1.oldKBState.IsKeyDown(Keys.LeftShift) && !this.invertShiftTransfering;
+            bool hotSwap = IsShiftHeld() && !this.invertShiftTransfering;
 
             // When dragging leftclick over the player inventory and hotswaping, attempt to transfer the items under the cursor
             if (hotSwap && this.heldItem is null && this.playerInventoryMenu.isWithinBounds(x, y) && this.playerInventoryMenu.getItemAt(x, y) is not null)
@@ -528,6 +564,14 @@ namespace ChestStorageSystem.Menus
             this.categoryDropdown.ReleaseLeftClick(x, y);
 
             this.scrollbar.ReleaseLeftClick();
+
+            if (this.quickStackButton.containsPoint(x, y))
+            {
+                this.quickStackButton.scale /= 1.1f;
+                this.Quickstack(IsShiftHeld() ? StorageAggregator.CanStackRules.ItemOnly : StorageAggregator.CanStackRules.IgnoreStackSize);
+                Game1.playSound("Ship");
+
+            }
         }
 
         public override void receiveRightClick(int x, int y, bool playSound = true)
@@ -716,7 +760,40 @@ namespace ChestStorageSystem.Menus
             return extractedItem;
         }
 
+        private void Quickstack(StorageAggregator.CanStackRules rules)
+        {
+            IList<Item> items = this.playerInventoryMenu.actualInventory;
+            for (int idx = 0; idx < items.Count; ++idx)
+            {
+                Item itemToInsert = items[idx];
+                if (itemToInsert is null)
+                {
+                    continue;
+                }
 
+                int prevStackSize = itemToInsert.Stack;
 
+                // Attempt to quickstack the item
+                Item itemRemaining = this.aggro.StackWithExisting(itemToInsert, rules);
+
+                // Was the item partially consumed?
+                if (itemRemaining is not null && itemRemaining.Stack == prevStackSize)
+                {
+                    // Nope, skip
+                    continue;
+                }
+
+                Rectangle sourceSlotBounds = (idx < this.playerInventoryMenu.inventory.Count)
+                    ? this.playerInventoryMenu.inventory[idx].bounds
+                    : this.playerInventoryMenu.inventory[0].bounds;
+                this._transferredItemSprites.Add(new TransferredItemSprite(itemToInsert.getOne(), sourceSlotBounds.X, sourceSlotBounds.Y));
+
+                // Was the item fully consumed?
+                if (itemRemaining is null)
+                {
+                    Utility.removeItemFromInventory(idx, items);
+                }
+            }
+        }
     }
 }
