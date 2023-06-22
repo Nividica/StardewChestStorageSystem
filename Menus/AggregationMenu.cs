@@ -513,8 +513,9 @@ namespace ChestStorageSystem.Menus
             {
                 this.hoverTitle = "Search Selected Category";
                 this.hoverText = "Searches item names and descriptions"
+                    + "\nClick with an item to search for that items name"
                     + "\nRight-click to clear"
-                    + "\n-- Advanced Search Modes --"
+                    + "\n\n-- Advanced Search Modes --"
                     + "\n> The # prefix searches item category. E.g: \"#forage\""
                     + "\n> The + prefix searches food buff names. E.g: \"+luck\""
                     + "\n> The =(equals) prefix and 1-3 searches quality. E.g: \"=2\""
@@ -548,6 +549,16 @@ namespace ChestStorageSystem.Menus
                 {
                     this.DropHeldItem();
                 }
+                return;
+            }
+
+            if (this.searchBox.ContentBounds.Contains(x, y))
+            {
+                if(this.heldItem is not null)
+                {
+                    this.searchTextbox.Text = this.heldItem.DisplayName;
+                }
+
                 return;
             }
 
