@@ -133,7 +133,7 @@ namespace ChestStorageSystem.UIComponents
 
             // Calculate the overall width and height from the backgrounds
             this.bounds.Height = this.minusButtonBg.Height + this.plusButtonBg.Height;
-            this.bounds.Width = this.minusButtonBg.Width + this.plusButtonBg.Height;
+            this.bounds.Width = this.minusButtonBg.Width + this.plusButtonBg.Width;
         }
     }
 }

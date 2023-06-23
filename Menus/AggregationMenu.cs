@@ -379,7 +379,14 @@ namespace ChestStorageSystem.Menus
 
             if (overStepper)
             {
-                this.hoverTitle = "Window Size";
+                string currentSize = this.widthMode switch
+                {
+                    WidthModes.Extended => "Extended",
+                    WidthModes.Full => "Full",
+                    _ => "Regular",
+                };
+
+                this.hoverTitle = $"Window Size: {currentSize}";
                 this.hoverText = ">Regular\n>Expanded (Default)\n>Full";
                 return;
             }
@@ -686,7 +693,7 @@ namespace ChestStorageSystem.Menus
             );
 
             // Width stepper bounds
-            this.aggroWidthStepper.bounds.X = this.playerInventoryBox.BorderBounds.X - this.aggroWidthStepper.bounds.Width;
+            this.aggroWidthStepper.bounds.X = this.playerInventoryBox.BorderBounds.X - this.aggroWidthStepper.bounds.Width - 4;
             this.aggroWidthStepper.bounds.Y = this.playerInventoryBox.BorderBounds.Y + 4;
             this.aggroWidthStepper.RecalculateBounds();
 
