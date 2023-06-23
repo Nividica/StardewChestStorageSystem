@@ -142,7 +142,9 @@ namespace ChestStorageSystem.UIComponents
 
         public BorderBox AligntTopTo(int y) => SetY(y + this._borderWidth);
 
-        public BorderBox AlignBottomTo(int y) => SetY((y - this.BorderBounds.Height) + this._borderWidth);
+        public BorderBox AlignBottomTo(int y) => SetY((y - this.BorderBounds.Height) + this.BorderWidth);
+
+        public BorderBox AlignRightTo(int x) => SetX((x - this.BorderBounds.Width) + this.BorderWidth);
 
         public BorderBox SetContentWidth(int w) => SetWidth(w + (this._padding * 2));
 

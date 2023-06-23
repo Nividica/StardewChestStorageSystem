@@ -162,7 +162,7 @@ namespace ChestStorageSystem.UIComponents
             // Is the DD large enough to need scrolling?
             if (ddBounds.Height > Game1.uiViewport.Height)
             {
-                if (direction > 0)
+                if (direction < 0)
                 {
                     // up -Y
                     if (ddBounds.Bottom > Game1.uiViewport.Height)

@@ -23,6 +23,13 @@ namespace ChestStorageSystem.Menus
             Night = 2,
         }
 
+        private enum WidthModes
+        {
+            Small = 0,
+            Extended = 1,
+            Full = 2,
+        }
+
         /// <summary>
         /// Remembers what category was selected after the UI is closed
         /// </summary>
@@ -81,8 +88,6 @@ namespace ChestStorageSystem.Menus
             return Game1.oldKBState.IsKeyDown(Keys.LeftShift) || Game1.oldKBState.IsKeyDown(Keys.RightShift);
         }
 
-        private InventoryMenu playerInventoryMenu;
-
         /// <summary>
         /// Aggregates all known inventories together
         /// </summary>
@@ -104,9 +109,24 @@ namespace ChestStorageSystem.Menus
         private readonly ScrollBar scrollbar;
 
         /// <summary>
+        /// Changes the max-width of the aggro window
+        /// </summary>
+        private readonly Stepper aggroWidthStepper;
+
+        /// <summary>
         /// Displays how much free space there is
         /// </summary>
         private readonly Gauge capacityGauge;
+
+        private readonly BorderBox playerInventoryBox = new();
+        private readonly BorderBox aggroInventoryBox = new();
+        private readonly BorderBox categoryDropDownBox = new();
+        private readonly BorderBox searchBox = new();
+
+        /// <summary>
+        /// Aggregated inventories graphical menu
+        /// </summary>
+        private InventoryMenu aggroMenu = null;
 
         /// <summary>
         /// Changes which background underlay is used.
@@ -114,25 +134,18 @@ namespace ChestStorageSystem.Menus
         private TimeOfDay timeOfDay = TimeOfDay.Day;
 
         /// <summary>
-        /// Aggregated inventories graphical menu
+        /// Sets the max width of the aggro window
         /// </summary>
-        private InventoryMenu aggroMenu = null;
+        private WidthModes widthMode = WidthModes.Extended;
 
-        private string hoverTitle = "";
-
-        private int aggroMenuColumnCount;
-        private int aggroMenuRowCount;
-
-        private bool invertShiftTransfering = false;
-
-        private readonly BorderBox playerInventoryBox = new();
-        private readonly BorderBox aggroInventoryBox = new();
-        private readonly BorderBox categoryDropDownBox = new();
-        private readonly BorderBox searchBox = new();
-
+        private InventoryMenu playerInventoryMenu;
         private ClickableTextureComponent quickStackButton;
         private Vector2 searchTooltipIconPosition;
         private Vector2 categoryTooltipIconPosition;
+        private string hoverTitle = "";
+        private int aggroMenuColumnCount;
+        private int aggroMenuRowCount;
+        private bool invertShiftTransfering = false;
 
         public AggregationMenu() : base(new List<Item>(), false, false, null, null, null)
         {
@@ -154,6 +167,9 @@ namespace ChestStorageSystem.Menus
 
             // Capacity Gauge (x3 scale)
             this.capacityGauge = new Gauge(Rectangle.Empty);
+
+            // Width stepper
+            this.aggroWidthStepper = new Stepper(Point.Zero, 3f);
 
             // Build the aggregation of all storages
             this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.Value, null);
@@ -181,6 +197,27 @@ namespace ChestStorageSystem.Menus
                 // Reset scroll
                 this.aggro.SlotShift = 0;
             };
+            this.aggroWidthStepper.OnStepped += (sender, args) =>
+            {
+                if (args.Direction > 0)
+                {
+                    if (this.widthMode >= WidthModes.Full)
+                    {
+                        return;
+                    }
+                    ++this.widthMode;
+                }
+                else
+                {
+                    if (this.widthMode <= WidthModes.Small)
+                    {
+                        return;
+                    }
+                    --this.widthMode;
+                }
+
+                this.RecalculateBounds();
+            };
         }
 
         public override void draw(SpriteBatch batch)
@@ -205,6 +242,9 @@ namespace ChestStorageSystem.Menus
 
             // Draw quickstack button
             this.quickStackButton.draw(batch, Color.White, 1f, 0);
+
+            // Draw the width stepper
+            this.aggroWidthStepper.Draw(batch);
 
             // Draw transfering items
             foreach (TransferredItemSprite itemSprite in this._transferredItemSprites)
@@ -331,11 +371,16 @@ namespace ChestStorageSystem.Menus
             this.hoverText = "";
             this.hoverTitle = "";
 
+            // Inform components which have hover-actions
             this.scrollbar.PerformHoverAction(x, y);
             this.quickStackButton.tryHover(x, y);
+            bool overStepper = this.aggroWidthStepper.PerformHoverAction(x, y);
+            this.categoryDropdown.PerformHoverAction(x, y);
 
-            if (this.categoryDropdown.PerformHoverAction(x, y))
+            if (overStepper)
             {
+                this.hoverTitle = "Window Size";
+                this.hoverText = ">Regular\n>Expanded (Default)\n>Full";
                 return;
             }
 
@@ -353,8 +398,6 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
-            #region User Tips
-
             if (this.quickStackButton.containsPoint(x, y))
             {
                 this.hoverTitle = "Add To Existing Stacks";
@@ -370,6 +413,8 @@ namespace ChestStorageSystem.Menus
                 this.hoverText = $"Capacity: {this.aggro.TotalSlots} Stacks\nEmpty Slots: {freeSlots}\nUtilization: {utilization}%";
                 return;
             }
+
+            #region Tip Icons
 
             Rectangle iconBounds = QuestionCircleTextureCoords;
 
@@ -438,6 +483,20 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
+            if (this.quickStackButton.containsPoint(x, y))
+            {
+                this.quickStackButton.scale /= 1.1f;
+                this.Quickstack(IsShiftHeld() ? StorageAggregator.CanStackRules.ItemOnly : StorageAggregator.CanStackRules.IgnoreStackSize);
+                Game1.playSound("Ship");
+
+                return;
+            }
+
+            if (this.aggroWidthStepper.ReceiveLeftClick(x, y))
+            {
+                return;
+            }
+
             // If true, try to skip holding the item and directly transfer items between the inventories
             bool hotSwap = IsShiftHeld() && !this.invertShiftTransfering;
 
@@ -479,14 +538,6 @@ namespace ChestStorageSystem.Menus
             this.categoryDropdown.ReleaseLeftClick(x, y);
 
             this.scrollbar.ReleaseLeftClick();
-
-            if (this.quickStackButton.containsPoint(x, y))
-            {
-                this.quickStackButton.scale /= 1.1f;
-                this.Quickstack(IsShiftHeld() ? StorageAggregator.CanStackRules.ItemOnly : StorageAggregator.CanStackRules.IgnoreStackSize);
-                Game1.playSound("Ship");
-
-            }
         }
 
         public override void receiveRightClick(int x, int y, bool playSound = true)
@@ -580,7 +631,7 @@ namespace ChestStorageSystem.Menus
             if (smallRes)
             {
                 // On small resolutions reduce the internal padding on all window boxes
-                allBoxes.ForEach((box) => box.Padding = BorderBox.defaultPadding / 2);
+                allBoxes.ForEach((box) => box.Padding = BorderBox.defaultPadding - 4);
             }
 
             // Gap between major elements, and margin around the entire UI
@@ -597,7 +648,7 @@ namespace ChestStorageSystem.Menus
 
             int capacityGaugeWidth = 36;
             int scrollbarOffsetX = 8;
-
+            int rightButtonBarGutter = 16 * 3;
 
             // Bounds of the player inventory window
             this.playerInventoryBox
@@ -605,6 +656,18 @@ namespace ChestStorageSystem.Menus
                 .SetContentHeight((Game1.tileSize * playerInventoryRows))
                 .CenterHorizontally(centerX)
                 .AlignBottomTo(Game1.uiViewport.Height - gap);
+
+            // Is the resolution extreamly small?
+            if ((this.playerInventoryBox.BorderBounds.Right + rightButtonBarGutter) > Game1.uiViewport.Width)
+            {
+                // Attempt to make room for the right-hand size buttons
+                this.playerInventoryBox
+                    .SetPadding(8)
+                    .SetContentWidth((Game1.tileSize * playerInventoryCols))
+                    .SetContentHeight((Game1.tileSize * playerInventoryRows))
+                    .AlignRightTo(Game1.uiViewport.Width - rightButtonBarGutter)
+                    .AlignBottomTo(Game1.uiViewport.Height - gap);
+            }
 
             // Create the player inventory menu
             this.playerInventoryMenu = BuildPlayerMenu(
@@ -616,11 +679,16 @@ namespace ChestStorageSystem.Menus
 
             // Quickstack button bounds
             this.quickStackButton = new ClickableTextureComponent(
-                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, 16 * 3, 16 * 3),
+                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, rightButtonBarGutter, rightButtonBarGutter),
                 Game1.mouseCursors,
                 QuickStackButtonTextureCoords,
                 3
             );
+
+            // Width stepper bounds
+            this.aggroWidthStepper.bounds.X = this.playerInventoryBox.BorderBounds.X - this.aggroWidthStepper.bounds.Width;
+            this.aggroWidthStepper.bounds.Y = this.playerInventoryBox.BorderBounds.Y + 4;
+            this.aggroWidthStepper.RecalculateBounds();
 
             // Bounds of the dropdown window
             int dropdownImplicitRightMargin = 8;
@@ -630,9 +698,19 @@ namespace ChestStorageSystem.Menus
                 .SetContentHeight(this.categoryDropdown.bounds.Height)
                 .SetContentWidth(this.categoryDropdown.bounds.Width - dropdownImplicitRightMargin);
 
-            // Calculate how many columns the aggro menu should have based on available width
+            // Calculate how many columns the aggro menu can have based on available width
             int availableWidth = Game1.uiViewport.Width - ((this.aggroInventoryBox.BorderWidth + this.aggroInventoryBox.Padding) * 2) - capacityGaugeWidth - ScrollBar.MIN_WIDTH - scrollbarOffsetX - gap;
-            this.aggroMenuColumnCount = Math.Min(18+6, availableWidth / Game1.tileSize);
+
+            // Determine what the users perference is
+            int preferedAggroColumnCount = this.widthMode switch
+            {
+                WidthModes.Extended => 18,
+                WidthModes.Full => int.MaxValue,
+                _ => playerInventoryCols,
+            };
+
+            // Take the smaller of the two
+            this.aggroMenuColumnCount = Math.Min(preferedAggroColumnCount, availableWidth / Game1.tileSize);
 
             // Dimensions of the aggro window
             this.aggroInventoryBox
@@ -667,8 +745,16 @@ namespace ChestStorageSystem.Menus
             this.searchBox
                 .AligntTopTo(gap)
                 .LeftAlignWith(this.aggroInventoryBox)
-                .SetContentHeight(this.categoryDropdown.bounds.Height)
-                .SetContentWidth(this.categoryDropdown.bounds.Width);
+                .SetContentHeight(this.categoryDropdown.bounds.Height);
+            int headroom = this.aggroInventoryBox.BorderBounds.Width - this.categoryDropDownBox.BorderBounds.Width;
+            if (headroom < this.categoryDropDownBox.BorderBounds.Width)
+            {
+                this.searchBox.SetWidth(headroom - (this.searchBox.BorderWidth * 2));
+            }
+            else
+            {
+                this.searchBox.SetContentWidth(this.categoryDropDownBox.ContentBounds.Width);
+            }
 
             // Reposition the textbox
             int textboxImplicitLeftPadding = 8;
@@ -722,6 +808,8 @@ namespace ChestStorageSystem.Menus
             allBoxes
                 .Select((box) => box.Bounds)
                 .Append(this.scrollbar.bounds)
+                .Append(this.quickStackButton.bounds)
+                .Append(this.aggroWidthStepper.bounds)
                 .Aggregate((a, b) => Rectangle.Union(a, b))
                 .Deconstruct(out this.xPositionOnScreen, out this.yPositionOnScreen, out this.width, out this.height);
         }
