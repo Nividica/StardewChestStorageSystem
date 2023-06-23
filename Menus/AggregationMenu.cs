@@ -10,7 +10,6 @@ using System.Linq;
 using System.Reflection;
 using ChestStorageSystem.Storage;
 using ChestStorageSystem.UIComponents;
-using StardewObject = StardewValley.Object;
 
 namespace ChestStorageSystem.Menus
 {
@@ -82,7 +81,7 @@ namespace ChestStorageSystem.Menus
             return Game1.oldKBState.IsKeyDown(Keys.LeftShift) || Game1.oldKBState.IsKeyDown(Keys.RightShift);
         }
 
-        private readonly InventoryMenu playerInventoryMenu;
+        private InventoryMenu playerInventoryMenu;
 
         /// <summary>
         /// Aggregates all known inventories together
@@ -121,8 +120,8 @@ namespace ChestStorageSystem.Menus
 
         private string hoverTitle = "";
 
-        private readonly int aggroMenuColumnCount;
-        private readonly int aggroMenuRowCount;
+        private int aggroMenuColumnCount;
+        private int aggroMenuRowCount;
 
         private bool invertShiftTransfering = false;
 
@@ -140,158 +139,27 @@ namespace ChestStorageSystem.Menus
             // Build the storage list
             List<StorageOrigin> storages = StorageOrigin.BuildStorageList();
 
-            int playerInventoryCols = 12;
-            int playerInventoryRows =
-             (int)Math.Ceiling(Game1.player.MaxItems / (float)playerInventoryCols);
-
-
-            List<BorderBox> allBoxes = new() { this.categoryDropDownBox, this.aggroInventoryBox, this.playerInventoryBox, this.searchBox };
-
-            bool smallRes = Game1.uiViewport.Height <= 800;
-            int gap = smallRes ? 0 : 32;
-            int centerX = (Game1.uiViewport.Width / 2);
-            if (smallRes)
-            {
-                allBoxes.ForEach((box) => box.Padding = BorderBox.defaultPadding / 2);
-            }
-
-            // Bounds of the player inventory window
-            this.playerInventoryBox
-                .SetContentWidth((Game1.tileSize * playerInventoryCols))
-                .SetContentHeight((Game1.tileSize * playerInventoryRows))
-                .CenterHorizontally(centerX)
-                .AlignBottomTo(Game1.uiViewport.Height - gap);
-
-            // Create the player inventory menu
-            this.playerInventoryMenu = BuildPlayerMenu(
-                this.playerInventoryBox.ContentBounds.X,
-                this.playerInventoryBox.ContentBounds.Y,
-                playerInventoryRows,
-                playerInventoryCols
-            );
-
-            // Quickstack button bounds
-            this.quickStackButton = new ClickableTextureComponent(
-                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, 16 * 3, 16 * 3),
-                Game1.mouseCursors,
-                QuickStackButtonTextureCoords,
-                3
-            );
-
             // Create category dropdown
             this.categoryDropdown = BuildCategoryDropdown(storages);
 
-            // Bounds of the dropdown window
-            int dropdownImplicitRightMargin = 8;
-            this.categoryDropDownBox.Padding = 0;
-            this.categoryDropDownBox
-                .AligntTopTo(gap)
-                .SetContentHeight(this.categoryDropdown.bounds.Height)
-                .SetContentWidth(this.categoryDropdown.bounds.Width - dropdownImplicitRightMargin);
-
-            int availableWidth = (Game1.uiViewport.Width - ((this.aggroInventoryBox.BorderWidth + this.aggroInventoryBox.Padding) * 2));
-            this.aggroMenuColumnCount = Math.Min(18, availableWidth / Game1.tileSize);
-
-            // Dimensions of the aggro window
-            this.aggroInventoryBox
-                .SetContentWidth(Game1.tileSize * this.aggroMenuColumnCount)
-                .CenterHorizontally(centerX)
-                // Overlap borders of the aggro and dropdown window
-                .SetY(this.categoryDropDownBox.BorderBounds.Bottom)
-                .ExpandDownTo(this.playerInventoryBox.BorderBounds.Top - gap);
-
-
-            // InventoryMenu quirks
-            // 1. Drawing starts at position.X - 4px
-            // 2. Slots are 64px wide and tall, BUT there are 4px tall gaps between slot rows
-            int slotVerticalGap = 4;
-            int slotHeight = Game1.tileSize + slotVerticalGap;
-
-            // Shrink down to an even number of rows
-
-            // Add a fake gap at the bottom to make the math easier, then remove it from the final height
-            this.aggroMenuRowCount = Math.Max(1, (this.aggroInventoryBox.ContentBounds.Height + slotVerticalGap) / slotHeight);
-            this.aggroInventoryBox.SetContentHeight((slotHeight * this.aggroMenuRowCount) - (3 * slotVerticalGap));
-
-            // Reposition the dropdown window (align right)
-            // and move the dropdown into the window
-            this.categoryDropDownBox.RightAlignWith(this.aggroInventoryBox);
-            this.categoryDropdown.bounds.X = this.categoryDropDownBox.Bounds.X;
-            this.categoryDropdown.bounds.Y = this.categoryDropDownBox.Bounds.Y;
-            this.categoryDropdown.RecalculateBounds();
-
-            // Tooltip icon for the category dropdown
-            this.categoryTooltipIconPosition = new Vector2(this.categoryDropDownBox.BorderBounds.Right - 16, this.categoryDropDownBox.BorderBounds.Y);
-
-            // Bounds of the user search textbox
-            this.searchBox.Padding = 0;
-            this.searchBox
-                .AligntTopTo(gap)
-                .LeftAlignWith(this.aggroInventoryBox)
-                .SetContentHeight(this.categoryDropdown.bounds.Height)
-                .SetContentWidth(this.categoryDropdown.bounds.Width);
-
             // Create the user search textbox
-            int textboxImplicitLeftPadding = 8;
             this.searchTextbox = new TextBox(Game1.content.Load<Texture2D>("LooseSprites\\textBox"), null, Game1.smallFont, Color.Black)
             {
-                X = this.searchBox.ContentBounds.X - textboxImplicitLeftPadding,
-                Y = this.searchBox.ContentBounds.Y,
-                Width = this.searchBox.ContentBounds.Width + textboxImplicitLeftPadding,
                 Text = "",
                 Selected = true,
             };
 
-            // Tooltip icon for the searchbox
-            this.searchTooltipIconPosition = new Vector2(this.searchBox.BorderBounds.Right - 16, this.searchBox.BorderBounds.Y);
-
             // Create the scrollbar
-            this.scrollbar = new ScrollBar(
-                new Rectangle(
-                    this.aggroInventoryBox.BorderBounds.Right + 8,
-                    this.aggroInventoryBox.BorderBounds.Y,
-                    0,
-                    this.aggroInventoryBox.BorderBounds.Height
-                ),
-                0, 0
-            );
-            // Make sure it doesn't go off screen
-            if (this.scrollbar.bounds.Right > Game1.uiViewport.Width)
-            {
-                this.scrollbar.bounds.X = Game1.uiViewport.Width - this.scrollbar.bounds.Width;
-                this.scrollbar.RecalculatePositions();
-            }
+            this.scrollbar = new ScrollBar(Rectangle.Empty, 0, 0);
 
             // Capacity Gauge (x3 scale)
-            this.capacityGauge = new Gauge(new Rectangle(this.aggroInventoryBox.BorderBounds.X - 36, this.aggroInventoryBox.Bounds.Y, 36, 135));
+            this.capacityGauge = new Gauge(Rectangle.Empty);
 
             // Build the aggregation of all storages
             this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.Value, null);
 
-            // Create the aggregate menu
-            this.aggroMenu = new InventoryMenu(
-                // X, Centered on the page
-                this.aggroInventoryBox.ContentBounds.X,
-                // Y
-                this.aggroInventoryBox.ContentBounds.Y,
-                // Not the default player inventory menu
-                false,
-                // Inventory source is the aggregator
-                this.aggro,
-                // No special highlighting
-                null,
-                // Capacity of the inventory
-                this.aggroMenuRowCount * this.aggroMenuColumnCount,
-                // Number of rows drawn (if it is evenly divisble by capacity!)
-                this.aggroMenuRowCount
-                );
-
-            // Calculate the overall bounds
-            allBoxes
-                .Select((box) => box.Bounds)
-                .Append(this.scrollbar.bounds)
-                .Aggregate((a, b) => Rectangle.Union(a, b))
-                .Deconstruct(out this.xPositionOnScreen, out this.yPositionOnScreen, out this.width, out this.height);
+            // Update everythings positions
+            this.RecalculateBounds();
 
             this.populateClickableComponentList();
 
@@ -313,8 +181,6 @@ namespace ChestStorageSystem.Menus
                 // Reset scroll
                 this.aggro.SlotShift = 0;
             };
-
-            //snapToDefaultClickableComponent();
         }
 
         public override void draw(SpriteBatch batch)
@@ -387,7 +253,7 @@ namespace ChestStorageSystem.Menus
             {
                 drawToolTip(batch,
                     hoverTitle: this.hoveredItem.DisplayName,
-                    hoverText: this.hoveredItem.getDescription() + $"\n\nYou have X of these in {this.categoryDropdown.SelectedItem.Name}",
+                    hoverText: this.hoveredItem.getDescription(), // + $"\n\nYou have X of these in {this.categoryDropdown.SelectedItem.Name}",
                     hoveredItem: this.hoveredItem,
                     heldItem: this.heldItem is not null
                 );
@@ -554,7 +420,7 @@ namespace ChestStorageSystem.Menus
 
             if (this.searchBox.ContentBounds.Contains(x, y))
             {
-                if(this.heldItem is not null)
+                if (this.heldItem is not null)
                 {
                     this.searchTextbox.Text = this.heldItem.DisplayName;
                 }
@@ -674,9 +540,9 @@ namespace ChestStorageSystem.Menus
             }
         }
 
-        public override void applyMovementKey(int direction)
+        public override void gameWindowSizeChanged(Rectangle oldBounds, Rectangle newBounds)
         {
-            base.applyMovementKey(direction);
+            this.RecalculateBounds();
         }
 
         public override void update(GameTime time)
@@ -702,6 +568,162 @@ namespace ChestStorageSystem.Menus
             int numberOfItemRows = (int)Math.Ceiling((this.aggro.LastSlotIndexWithItem() + 1) / (float)this.aggroMenuColumnCount);
             int numberOfOverflowRows = Math.Max(0, numberOfItemRows - this.aggroMenuRowCount);
             this.scrollbar.Steps = numberOfOverflowRows;
+        }
+
+        public void RecalculateBounds()
+        {
+            // All window boxes
+            List<BorderBox> allBoxes = new() { this.categoryDropDownBox, this.aggroInventoryBox, this.playerInventoryBox, this.searchBox };
+
+            // Determine if we are on a small resolution(or high zoom value)
+            bool smallRes = Game1.uiViewport.Height <= 800;
+            if (smallRes)
+            {
+                // On small resolutions reduce the internal padding on all window boxes
+                allBoxes.ForEach((box) => box.Padding = BorderBox.defaultPadding / 2);
+            }
+
+            // Gap between major elements, and margin around the entire UI
+            int gap = smallRes ? 0 : 32;
+
+            // Get the horizontal center of the viewport
+            // This will be the main alignment axis
+            int centerX = (Game1.uiViewport.Width / 2);
+
+            // Size of the player inventory
+            int playerInventoryCols = 12;
+            int playerInventoryRows =
+             (int)Math.Ceiling(Game1.player.MaxItems / (float)playerInventoryCols);
+
+            int capacityGaugeWidth = 36;
+            int scrollbarOffsetX = 8;
+
+
+            // Bounds of the player inventory window
+            this.playerInventoryBox
+                .SetContentWidth((Game1.tileSize * playerInventoryCols))
+                .SetContentHeight((Game1.tileSize * playerInventoryRows))
+                .CenterHorizontally(centerX)
+                .AlignBottomTo(Game1.uiViewport.Height - gap);
+
+            // Create the player inventory menu
+            this.playerInventoryMenu = BuildPlayerMenu(
+                this.playerInventoryBox.ContentBounds.X,
+                this.playerInventoryBox.ContentBounds.Y,
+                playerInventoryRows,
+                playerInventoryCols
+            );
+
+            // Quickstack button bounds
+            this.quickStackButton = new ClickableTextureComponent(
+                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, 16 * 3, 16 * 3),
+                Game1.mouseCursors,
+                QuickStackButtonTextureCoords,
+                3
+            );
+
+            // Bounds of the dropdown window
+            int dropdownImplicitRightMargin = 8;
+            this.categoryDropDownBox.Padding = 0;
+            this.categoryDropDownBox
+                .AligntTopTo(gap)
+                .SetContentHeight(this.categoryDropdown.bounds.Height)
+                .SetContentWidth(this.categoryDropdown.bounds.Width - dropdownImplicitRightMargin);
+
+            // Calculate how many columns the aggro menu should have based on available width
+            int availableWidth = Game1.uiViewport.Width - ((this.aggroInventoryBox.BorderWidth + this.aggroInventoryBox.Padding) * 2) - capacityGaugeWidth - ScrollBar.MIN_WIDTH - scrollbarOffsetX - gap;
+            this.aggroMenuColumnCount = Math.Min(18+6, availableWidth / Game1.tileSize);
+
+            // Dimensions of the aggro window
+            this.aggroInventoryBox
+                .SetContentWidth(Game1.tileSize * this.aggroMenuColumnCount)
+                .CenterHorizontally(centerX)
+                // Overlap borders of the aggro and dropdown window
+                .SetY(this.categoryDropDownBox.BorderBounds.Bottom)
+                .ExpandDownTo(this.playerInventoryBox.BorderBounds.Top - gap);
+
+            // InventoryMenu quirks
+            // 1. Drawing starts at position.X - 4px
+            // 2. Slots are 64px wide and tall, BUT there are 4px tall gaps between slot rows
+            int slotVerticalGap = 4;
+            int slotHeight = Game1.tileSize + slotVerticalGap;
+
+            // Add a fake gap at the bottom to make the math easier, then remove it from the final height
+            this.aggroMenuRowCount = Math.Max(1, (this.aggroInventoryBox.ContentBounds.Height + slotVerticalGap) / slotHeight);
+            this.aggroInventoryBox.SetContentHeight((slotHeight * this.aggroMenuRowCount) - (3 * slotVerticalGap));
+
+            // Reposition the dropdown window (align right)
+            // and move the dropdown into the window
+            this.categoryDropDownBox.RightAlignWith(this.aggroInventoryBox);
+            this.categoryDropdown.bounds.X = this.categoryDropDownBox.Bounds.X;
+            this.categoryDropdown.bounds.Y = this.categoryDropDownBox.Bounds.Y;
+            this.categoryDropdown.RecalculateBounds();
+
+            // Tooltip icon for the category dropdown
+            this.categoryTooltipIconPosition = new Vector2(this.categoryDropDownBox.BorderBounds.Right - 16, this.categoryDropDownBox.BorderBounds.Y);
+
+            // Bounds of the user search textbox
+            this.searchBox.Padding = 0;
+            this.searchBox
+                .AligntTopTo(gap)
+                .LeftAlignWith(this.aggroInventoryBox)
+                .SetContentHeight(this.categoryDropdown.bounds.Height)
+                .SetContentWidth(this.categoryDropdown.bounds.Width);
+
+            // Reposition the textbox
+            int textboxImplicitLeftPadding = 8;
+
+            this.searchTextbox.X = this.searchBox.ContentBounds.X - textboxImplicitLeftPadding;
+            this.searchTextbox.Y = this.searchBox.ContentBounds.Y;
+            this.searchTextbox.Width = this.searchBox.ContentBounds.Width + textboxImplicitLeftPadding;
+
+            // Tooltip icon for the searchbox
+            this.searchTooltipIconPosition = new Vector2(this.searchBox.BorderBounds.Right - 16, this.searchBox.BorderBounds.Y);
+
+            // Update the scrollbar bounds
+            this.scrollbar.bounds = new Rectangle(
+                this.aggroInventoryBox.BorderBounds.Right + scrollbarOffsetX,
+                this.aggroInventoryBox.BorderBounds.Y,
+                0,
+                this.aggroInventoryBox.BorderBounds.Height
+            );
+            this.scrollbar.RecalculateBounds();
+
+            // Make sure it doesn't go off screen
+            if (this.scrollbar.bounds.Right > Game1.uiViewport.Width)
+            {
+                this.scrollbar.bounds.X = Game1.uiViewport.Width - this.scrollbar.bounds.Width;
+                this.scrollbar.RecalculateBounds();
+            }
+
+            // Update capacity gauge and its children
+            this.capacityGauge.Bounds = new Rectangle(this.aggroInventoryBox.BorderBounds.X - 36, this.aggroInventoryBox.Bounds.Y, capacityGaugeWidth, 135);
+            this.capacityGauge.RecalculateBounds();
+
+            // Create the aggregate menu
+            this.aggroMenu = new InventoryMenu(
+                // X, Centered on the page
+                this.aggroInventoryBox.ContentBounds.X,
+                // Y
+                this.aggroInventoryBox.ContentBounds.Y,
+                // Not the default player inventory menu
+                false,
+                // Inventory source is the aggregator
+                this.aggro,
+                // No special highlighting
+                null,
+                // Capacity of the inventory
+                this.aggroMenuRowCount * this.aggroMenuColumnCount,
+                // Number of rows drawn (if it is evenly divisble by capacity!)
+                this.aggroMenuRowCount
+            );
+
+            // Calculate the overall bounds
+            allBoxes
+                .Select((box) => box.Bounds)
+                .Append(this.scrollbar.bounds)
+                .Aggregate((a, b) => Rectangle.Union(a, b))
+                .Deconstruct(out this.xPositionOnScreen, out this.yPositionOnScreen, out this.width, out this.height);
         }
 
         /// <summary>
@@ -843,6 +865,8 @@ namespace ChestStorageSystem.Menus
                     Utility.removeItemFromInventory(idx, items);
                 }
             }
+
+            this.aggro.SearchAndSort();
         }
     }
 }

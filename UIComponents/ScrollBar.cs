@@ -15,6 +15,8 @@ namespace ChestStorageSystem.UIComponents
             public ValueChangedArgs(int value) { Value = value; }
         }
 
+        public const int MIN_WIDTH = 44;
+
         public static readonly Rectangle UpButtonTextureCoords = new(421, 459, 11, 12);
         public static readonly Rectangle DownButtonTextureCoords = new(421, 472, 11, 12);
         public static readonly Rectangle ThumbButtonTextureCoords = new(435, 463, 6, 10);
@@ -56,7 +58,6 @@ namespace ChestStorageSystem.UIComponents
 
         public ScrollBar(Rectangle bounds, int steps, int initialValue = 0) : base(bounds, "scrollbar")
         {
-            this.bounds.Width = 44;
             this.upButton = new ClickableTextureComponent(new Rectangle(0, 0, 44, 48), Game1.mouseCursors, UpButtonTextureCoords, 4f);
             this.downButton = new ClickableTextureComponent(new Rectangle(0, 0, 44, 48), Game1.mouseCursors, DownButtonTextureCoords, 4f);
             this.thumb = new ClickableTextureComponent(new Rectangle(0, 0, 24, 40), Game1.mouseCursors, ThumbButtonTextureCoords, 4f);
@@ -65,7 +66,7 @@ namespace ChestStorageSystem.UIComponents
             this._steps = steps;
             this._value = initialValue;
 
-            this.RecalculatePositions();
+            this.RecalculateBounds();
         }
 
         public void Draw(SpriteBatch batch)
@@ -112,8 +113,10 @@ namespace ChestStorageSystem.UIComponents
             batch.Draw(Game1.mouseCursors, tailBounds, tailTBTC, Color.White);
         }
 
-        public void RecalculatePositions()
+        public void RecalculateBounds()
         {
+            this.bounds.Width = Math.Max(this.bounds.Width, MIN_WIDTH);
+
             this.upButton.bounds.X = this.bounds.X;
             this.upButton.bounds.Y = this.bounds.Y;
 
