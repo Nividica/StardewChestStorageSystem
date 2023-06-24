@@ -5,7 +5,7 @@ namespace ChestStorageSystem.UIComponents
 {
     public class BorderBox
     {
-        public const int defaultBorderWidth = Game1.tileSize / 4;
+        public const int defaultBorderThickness = Game1.tileSize / 4;
 
         public const int defaultPadding = 32;
 
@@ -61,13 +61,13 @@ namespace ChestStorageSystem.UIComponents
             }
         }
 
-        public int BorderWidth
+        public int BorderThickness
         {
-            get { return this._borderWidth; }
+            get { return this._borderThickness; }
             set
             {
                 this.dirty = true;
-                this._borderWidth = value;
+                this._borderThickness = value;
             }
         }
 
@@ -75,18 +75,18 @@ namespace ChestStorageSystem.UIComponents
         private Rectangle _contentBounds;
         private Rectangle _borderBounds;
         private int _padding;
-        private int _borderWidth;
+        private int _borderThickness;
 
         /// <summary>
         /// When this is true the bounds have been changed, but the content and border bounds have not been updated to match.
         /// </summary>
         private bool dirty = true;
 
-        public BorderBox(int x = 0, int y = 0, int width = 0, int height = 0, int padding = defaultPadding, int borderWidth = defaultBorderWidth)
+        public BorderBox(int x = 0, int y = 0, int width = 0, int height = 0, int padding = defaultPadding, int borderWidth = defaultBorderThickness)
         {
             this._bounds = new Rectangle(x, y, width, height);
             this._padding = padding;
-            this._borderWidth = borderWidth;
+            this._borderThickness = borderWidth;
             this.RecalculateBounds();
         }
 
@@ -99,7 +99,7 @@ namespace ChestStorageSystem.UIComponents
 
         public BorderBox SetBorderWidth(int borderWidth)
         {
-            this._borderWidth = borderWidth;
+            this._borderThickness = borderWidth;
             this.dirty = true;
             return this;
         }
@@ -132,19 +132,37 @@ namespace ChestStorageSystem.UIComponents
             return this;
         }
 
-        public BorderBox ExpandDownTo(int y) => SetHeight(y - (this._bounds.Y + this._borderWidth));
+        public BorderBox Offset(int x, int y)
+        {
+            if (x != 0)
+            {
+                this.SetX(this.Bounds.X + x);
+            }
+            if (y != 0)
+            {
+                this.SetY(this.Bounds.Y + y);
+            }
+
+            return this;
+        }
+
+        public BorderBox ExpandDownTo(int y) => SetHeight(y - (this._bounds.Y + this._borderThickness));
 
         public BorderBox CenterHorizontally(int onX) => SetX(onX - (this._bounds.Width / 2));
 
-        public BorderBox LeftAlignWith(BorderBox other) => SetX(other._bounds.X);
+        public BorderBox LeftAlignWith(Rectangle other) => SetX(other.X);
 
-        public BorderBox RightAlignWith(BorderBox other) => SetX(other._bounds.Right - this._bounds.Width);
+        public BorderBox LeftAlignWith(BorderBox other) => LeftAlignWith(other._bounds);
 
-        public BorderBox AligntTopTo(int y) => SetY(y + this._borderWidth);
+        public BorderBox RightAlignWith(Rectangle other) => SetX(other.Right - this._bounds.Width);
 
-        public BorderBox AlignBottomTo(int y) => SetY((y - this.BorderBounds.Height) + this.BorderWidth);
+        public BorderBox RightAlignWith(BorderBox other) => RightAlignWith(other._bounds);
 
-        public BorderBox AlignRightTo(int x) => SetX((x - this.BorderBounds.Width) + this.BorderWidth);
+        public BorderBox AligntTopTo(int y) => SetY(y + this._borderThickness);
+
+        public BorderBox AlignBottomTo(int y) => SetY((y - this.BorderBounds.Height) + this.BorderThickness);
+
+        public BorderBox AlignRightTo(int x) => SetX((x - this.BorderBounds.Width) + this.BorderThickness);
 
         public BorderBox SetContentWidth(int w) => SetWidth(w + (this._padding * 2));
 
@@ -165,7 +183,7 @@ namespace ChestStorageSystem.UIComponents
             this._contentBounds.Inflate(-this._padding, -this._padding);
 
             this._borderBounds = this._bounds;
-            this._borderBounds.Inflate(this._borderWidth, this._borderWidth);
+            this._borderBounds.Inflate(this._borderThickness, this._borderThickness);
 
             this.dirty = false;
         }

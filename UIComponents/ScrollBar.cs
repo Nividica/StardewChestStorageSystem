@@ -16,6 +16,7 @@ namespace ChestStorageSystem.UIComponents
         }
 
         public const int MIN_WIDTH = 44;
+        public const double MIN_THUMB_HEIGHT = 28.0f;
 
         public static readonly Rectangle UpButtonTextureCoords = new(421, 459, 11, 12);
         public static readonly Rectangle DownButtonTextureCoords = new(421, 472, 11, 12);
@@ -126,6 +127,12 @@ namespace ChestStorageSystem.UIComponents
             this.track.X = 1 + ((this.upButton.bounds.X + (this.upButton.bounds.Width / 2)) - (this.track.Width / 2));
             this.track.Y = this.upButton.bounds.Bottom + this.Gap;
             this.track.Height = this.downButton.bounds.Y - this.Gap - this.track.Y;
+            if (this.track.Height < MIN_THUMB_HEIGHT)
+            {
+                // Ignore the gap
+                this.track.Y -= this.Gap;
+                this.track.Height += this.Gap * 2;
+            }
 
             this.thumb.bounds.X = this.track.X;
 
@@ -203,7 +210,7 @@ namespace ChestStorageSystem.UIComponents
             double offsetPercent = this._steps == 0 ? 0.0 : (this._value / (double)this._steps);
 
             // Calculate the height of the thumb
-            this.dynamicThumbHeight = Math.Max(28.0, this.track.Height / (this._steps + 1.0));
+            this.dynamicThumbHeight = Math.Max(MIN_THUMB_HEIGHT, this.track.Height / (this._steps + 1.0));
 
             // Calculate the Y offset of the thumb
             double thumbOffset = (this.track.Height - this.dynamicThumbHeight) * offsetPercent;

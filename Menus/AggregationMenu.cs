@@ -33,6 +33,8 @@ namespace ChestStorageSystem.Menus
         private static Rectangle StarsTextureCoords = new(0, 1453, 640, 195);
         private static Rectangle QuickStackButtonTextureCoords = new(103, 469, 16, 16);
         private static Rectangle QuestionCircleTextureCoords = new(240, 192, 16, 16);
+        private static Rectangle LightShiftTextureCoords = new(0, 144, 16, 16);
+        private static Rectangle DarkShiftTextureCoords = new(0, 176, 16, 16);
 
         private static InventoryMenu BuildPlayerMenu(int x, int y, int rows, int cols)
         {
@@ -133,6 +135,7 @@ namespace ChestStorageSystem.Menus
 
         private InventoryMenu playerInventoryMenu;
         private ClickableTextureComponent quickStackButton;
+        private ClickableTextureComponent shiftBehaviorButton;
         private Vector2 searchTooltipIconPosition;
         private Vector2 categoryTooltipIconPosition;
         private string hoverTitle = "";
@@ -143,6 +146,8 @@ namespace ChestStorageSystem.Menus
         public AggregationMenu(CSS css) : base(new List<Item>(), false, false, null, null, null)
         {
             this.css = css;
+            this.widthMode = this.css.Config.WidthMode;
+            this.invertShiftTransfering = this.css.Config.InvertShiftTransfer;
 
             // Build the storage list
             List<StorageOrigin> storages = StorageOrigin.BuildStorageList();
@@ -165,7 +170,6 @@ namespace ChestStorageSystem.Menus
 
             // Width stepper
             this.aggroWidthStepper = new Stepper(Point.Zero, 3f);
-            this.widthMode = this.css.Config.WidthMode;
 
             // Build the aggregation of all storages
             this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.Value, null);
@@ -234,6 +238,9 @@ namespace ChestStorageSystem.Menus
 
             // Draw the width stepper
             this.aggroWidthStepper.Draw(batch);
+
+            // Shift behavior
+            this.shiftBehaviorButton.draw(batch, Color.White, 1f, 0);
 
             // Draw transfering items
             foreach (TransferredItemSprite itemSprite in this._transferredItemSprites)
@@ -363,6 +370,7 @@ namespace ChestStorageSystem.Menus
             // Inform components which have hover-actions
             this.scrollbar.PerformHoverAction(x, y);
             this.quickStackButton.tryHover(x, y);
+            this.shiftBehaviorButton.tryHover(x, y);
             bool overStepper = this.aggroWidthStepper.PerformHoverAction(x, y);
             this.categoryDropdown.PerformHoverAction(x, y);
 
@@ -398,6 +406,18 @@ namespace ChestStorageSystem.Menus
             {
                 this.hoverTitle = "Add To Existing Stacks";
                 this.hoverText = "Hold [Shift] to ignore color and quality";
+                return;
+            }
+
+            if (this.shiftBehaviorButton.containsPoint(x, y))
+            {
+                string p = "Pick up";
+                string t = "Transfer";
+                this.hoverTitle = "Item Click Behavior";
+                this.hoverText = $"Click: {(this.invertShiftTransfering ? t : p)}"
+                    + $"\n[Shift]+Click: {(this.invertShiftTransfering ? p : t)}"
+                    + $"\n\nRight Click: {(this.invertShiftTransfering ? t : p)} one"
+                    + $"\n[Shift] + RClick: {(this.invertShiftTransfering ? t : p)} half";
                 return;
             }
 
@@ -488,13 +508,22 @@ namespace ChestStorageSystem.Menus
                 return;
             }
 
+            if (this.shiftBehaviorButton.containsPoint(x, y))
+            {
+                this.shiftBehaviorButton.scale /= 1.1f;
+                this.invertShiftTransfering = !this.invertShiftTransfering;
+                this.shiftBehaviorButton.sourceRect = this.invertShiftTransfering ? DarkShiftTextureCoords : LightShiftTextureCoords;
+                Game1.playSound("drumkit6");
+                return;
+            }
+
             if (this.aggroWidthStepper.ReceiveLeftClick(x, y))
             {
                 return;
             }
 
             // If true, try to skip holding the item and directly transfer items between the inventories
-            bool hotSwap = IsShiftHeld() && !this.invertShiftTransfering;
+            bool hotSwap = IsShiftHeld() != this.invertShiftTransfering;
 
             if (this.playerInventoryMenu.isWithinBounds(x, y))
             {
@@ -546,12 +575,21 @@ namespace ChestStorageSystem.Menus
             if (this.playerInventoryMenu.isWithinBounds(x, y))
             {
                 this.heldItem = this.playerInventoryMenu.rightClick(x, y, this.heldItem, playSound);
+                if (this.invertShiftTransfering && this.heldItem is not null)
+                {
+                    this.heldItem = this.aggro.Upsert(this.heldItem, -1);
+                }
                 return;
             }
 
             if (this.aggroMenu.isWithinBounds(x, y))
             {
-                this.heldItem = this.aggroMenu.rightClick(x, y, this.heldItem, playSound);
+                this.heldItem = this.aggroMenu.rightClick(x, y, this.heldItem, !this.invertShiftTransfering && playSound);
+                if (this.invertShiftTransfering && this.heldItem is not null)
+                {
+                    this.heldItem = this.playerInventoryMenu.tryToAddItem(this.heldItem, playSound ? "coin" : "");
+                }
+
                 return;
             }
 
@@ -628,12 +666,21 @@ namespace ChestStorageSystem.Menus
                 saveConfig = true;
             }
 
+            if (config.InvertShiftTransfer != this.invertShiftTransfering)
+            {
+                config.InvertShiftTransfer = this.invertShiftTransfering;
+                saveConfig = true;
+            }
+
             if (saveConfig)
             {
                 this.css.SaveConfig();
             }
         }
 
+        /// <summary>
+        /// Reflows all windows and controls
+        /// </summary>
         public void RecalculateBounds()
         {
             // All window boxes
@@ -647,8 +694,13 @@ namespace ChestStorageSystem.Menus
                 allBoxes.ForEach((box) => box.Padding = BorderBox.defaultPadding - 4);
             }
 
-            // Gap between major elements, and margin around the entire UI
-            int gap = smallRes ? 0 : 32;
+            // Gap between the aggro and player boxes
+            int gap = 32;
+
+            // Margin around the entire UI
+            int marginY = smallRes ? 0 : gap;
+            int marginX = marginY;
+
 
             // Get the horizontal center of the viewport
             // This will be the main alignment axis
@@ -668,7 +720,7 @@ namespace ChestStorageSystem.Menus
                 .SetContentWidth((Game1.tileSize * playerInventoryCols))
                 .SetContentHeight((Game1.tileSize * playerInventoryRows))
                 .CenterHorizontally(centerX)
-                .AlignBottomTo(Game1.uiViewport.Height - gap);
+                .AlignBottomTo(Game1.uiViewport.Height - marginY);
 
             // Is the resolution extreamly small?
             if ((this.playerInventoryBox.BorderBounds.Right + rightButtonBarGutter) > Game1.uiViewport.Width)
@@ -679,40 +731,19 @@ namespace ChestStorageSystem.Menus
                     .SetContentWidth((Game1.tileSize * playerInventoryCols))
                     .SetContentHeight((Game1.tileSize * playerInventoryRows))
                     .AlignRightTo(Game1.uiViewport.Width - rightButtonBarGutter)
-                    .AlignBottomTo(Game1.uiViewport.Height - gap);
+                    .AlignBottomTo(Game1.uiViewport.Height - marginY);
             }
-
-            // Create the player inventory menu
-            this.playerInventoryMenu = BuildPlayerMenu(
-                this.playerInventoryBox.ContentBounds.X,
-                this.playerInventoryBox.ContentBounds.Y,
-                playerInventoryRows,
-                playerInventoryCols
-            );
-
-            // Quickstack button bounds
-            this.quickStackButton = new ClickableTextureComponent(
-                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, rightButtonBarGutter, rightButtonBarGutter),
-                Game1.mouseCursors,
-                QuickStackButtonTextureCoords,
-                3
-            );
-
-            // Width stepper bounds
-            this.aggroWidthStepper.bounds.X = this.playerInventoryBox.BorderBounds.X - this.aggroWidthStepper.bounds.Width - 4;
-            this.aggroWidthStepper.bounds.Y = this.playerInventoryBox.BorderBounds.Y + 4;
-            this.aggroWidthStepper.RecalculateBounds();
 
             // Bounds of the dropdown window
             int dropdownImplicitRightMargin = 8;
             this.categoryDropDownBox.Padding = 0;
             this.categoryDropDownBox
-                .AligntTopTo(gap)
+                .AligntTopTo(marginY)
                 .SetContentHeight(this.categoryDropdown.bounds.Height)
                 .SetContentWidth(this.categoryDropdown.bounds.Width - dropdownImplicitRightMargin);
 
             // Calculate how many columns the aggro menu can have based on available width
-            int availableWidth = Game1.uiViewport.Width - ((this.aggroInventoryBox.BorderWidth + this.aggroInventoryBox.Padding) * 2) - capacityGaugeWidth - ScrollBar.MIN_WIDTH - scrollbarOffsetX - gap;
+            int availableWidth = Game1.uiViewport.Width - ((this.aggroInventoryBox.BorderThickness + this.aggroInventoryBox.Padding) * 2) - capacityGaugeWidth - ScrollBar.MIN_WIDTH - scrollbarOffsetX - marginX;
 
             // Determine what the users perference is
             int preferedAggroColumnCount = this.widthMode switch
@@ -743,6 +774,60 @@ namespace ChestStorageSystem.Menus
             this.aggroMenuRowCount = Math.Max(1, (this.aggroInventoryBox.ContentBounds.Height + slotVerticalGap) / slotHeight);
             this.aggroInventoryBox.SetContentHeight((slotHeight * this.aggroMenuRowCount) - (3 * slotVerticalGap));
 
+            // Slide the player inventory up to the gap
+            if (gap > 0 && (this.playerInventoryBox.BorderBounds.Y - this.aggroInventoryBox.BorderBounds.Bottom) > gap)
+            {
+                this.playerInventoryBox.AligntTopTo(this.aggroInventoryBox.BorderBounds.Bottom + gap);
+            }
+
+            // Is there any vertical room to center?
+            int availableHeight = Game1.uiViewport.Height - this.playerInventoryBox.BorderBounds.Bottom - marginY;
+            if (availableHeight > 2)
+            {
+                // Expand the margin
+                int addMargin = availableHeight / 2;
+                marginY += addMargin;
+
+                // Reposition
+                this.categoryDropDownBox.Offset(0, addMargin);
+                this.aggroInventoryBox.Offset(0, addMargin);
+                this.playerInventoryBox.Offset(0, addMargin);
+            }
+
+            // Create the player inventory menu
+            this.playerInventoryMenu = BuildPlayerMenu(
+                this.playerInventoryBox.ContentBounds.X,
+                this.playerInventoryBox.ContentBounds.Y,
+                playerInventoryRows,
+                playerInventoryCols
+            );
+
+            // Quickstack button
+            this.quickStackButton = new ClickableTextureComponent(
+                new Rectangle(this.playerInventoryBox.BorderBounds.Right + 5, this.playerInventoryBox.BorderBounds.Y, rightButtonBarGutter, rightButtonBarGutter),
+                Game1.mouseCursors,
+                QuickStackButtonTextureCoords,
+                3f
+            );
+
+            // Shift behavior button
+            this.shiftBehaviorButton = new ClickableTextureComponent(
+                new Rectangle(
+                    this.quickStackButton.bounds.X,
+                    this.quickStackButton.bounds.Bottom + 4,
+                    LightShiftTextureCoords.Width * 3,
+                    LightShiftTextureCoords.Height * 3
+                ),
+                Game1.mouseCursors2,
+                this.invertShiftTransfering ? DarkShiftTextureCoords : LightShiftTextureCoords,
+                3f
+            );
+
+            // Width stepper bounds
+            this.aggroWidthStepper.bounds.X = this.playerInventoryBox.BorderBounds.X - this.aggroWidthStepper.bounds.Width - 4;
+            this.aggroWidthStepper.bounds.Y = this.playerInventoryBox.BorderBounds.Center.Y - (this.aggroWidthStepper.bounds.Height / 2);
+            this.aggroWidthStepper.RecalculateBounds();
+
             // Reposition the dropdown window (align right)
             // and move the dropdown into the window
             this.categoryDropDownBox.RightAlignWith(this.aggroInventoryBox);
@@ -756,13 +841,13 @@ namespace ChestStorageSystem.Menus
             // Bounds of the user search textbox
             this.searchBox.Padding = 0;
             this.searchBox
-                .AligntTopTo(gap)
+                .AligntTopTo(marginY)
                 .LeftAlignWith(this.aggroInventoryBox)
                 .SetContentHeight(this.categoryDropdown.bounds.Height);
             int headroom = this.aggroInventoryBox.BorderBounds.Width - this.categoryDropDownBox.BorderBounds.Width;
             if (headroom < this.categoryDropDownBox.BorderBounds.Width)
             {
-                this.searchBox.SetWidth(headroom - (this.searchBox.BorderWidth * 2));
+                this.searchBox.SetWidth(headroom - (this.searchBox.BorderThickness * 2));
             }
             else
             {
@@ -823,6 +908,7 @@ namespace ChestStorageSystem.Menus
                 .Append(this.scrollbar.bounds)
                 .Append(this.quickStackButton.bounds)
                 .Append(this.aggroWidthStepper.bounds)
+                .Append(this.shiftBehaviorButton.bounds)
                 .Aggregate((a, b) => Rectangle.Union(a, b))
                 .Deconstruct(out this.xPositionOnScreen, out this.yPositionOnScreen, out this.width, out this.height);
         }

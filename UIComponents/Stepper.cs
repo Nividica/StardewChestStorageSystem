@@ -132,7 +132,7 @@ namespace ChestStorageSystem.UIComponents
             this.plusButton.baseScale = this.plusButton.scale = (this.plusButton.bounds.Width / (float)PlusButtonTextureCoords.Width);
 
             // Calculate the overall width and height from the backgrounds
-            this.bounds.Height = this.minusButtonBg.Height + this.plusButtonBg.Height;
+            this.bounds.Height = Math.Max(this.minusButtonBg.Height, this.plusButtonBg.Height);
             this.bounds.Width = this.minusButtonBg.Width + this.plusButtonBg.Width;
         }
     }
