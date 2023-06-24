@@ -9,14 +9,14 @@ namespace ChestStorageSystem
 {
     public class CSS : Mod
     {
-        public static Configuration Config { get; private set; }
-
         private static IMonitor Logger;
 
         public static void Log(string msg, LogLevel level = LogLevel.Debug)
         {
             Logger?.Log(msg, level);
         }
+
+        public Configuration Config { get; private set; }
 
         public override void Entry(IModHelper smapi)
         {
@@ -62,7 +62,7 @@ namespace ChestStorageSystem
             // Does the user want to open the UI?
             if (e.Button == Config.OpenUIKey && Context.IsPlayerFree && Game1.activeClickableMenu is null)
             {
-                Game1.activeClickableMenu = new Menus.AggregationMenu();
+                Game1.activeClickableMenu = new Menus.AggregationMenu(this);
                 //Game1.activeClickableMenu = new Menus.TextureExplorerMenu();
             }
         }

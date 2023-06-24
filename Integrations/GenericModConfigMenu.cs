@@ -33,8 +33,8 @@ namespace ChestStorageSystem.Integrations
             // OpenUI keybind
             gmcm.AddKeybind(
                 css.ModManifest,
-                () => CSS.Config.OpenUIKey,
-                (key) => CSS.Config.OpenUIKey = key,
+                () => css.Config.OpenUIKey,
+                (key) => css.Config.OpenUIKey = key,
                 () => "Open UI Key"
             );
 

@@ -1,15 +1,14 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Menus;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using ChestStorageSystem.Storage;
 using ChestStorageSystem.UIComponents;
+using WidthModes = ChestStorageSystem.Configuration.WidthModes;
 
 namespace ChestStorageSystem.Menus
 {
@@ -21,13 +20,6 @@ namespace ChestStorageSystem.Menus
             Day = 0,
             Sunset = 1,
             Night = 2,
-        }
-
-        private enum WidthModes
-        {
-            Small = 0,
-            Extended = 1,
-            Full = 2,
         }
 
         /// <summary>
@@ -122,6 +114,7 @@ namespace ChestStorageSystem.Menus
         private readonly BorderBox aggroInventoryBox = new();
         private readonly BorderBox categoryDropDownBox = new();
         private readonly BorderBox searchBox = new();
+        private readonly CSS css;
 
         /// <summary>
         /// Aggregated inventories graphical menu
@@ -136,7 +129,7 @@ namespace ChestStorageSystem.Menus
         /// <summary>
         /// Sets the max width of the aggro window
         /// </summary>
-        private WidthModes widthMode = WidthModes.Extended;
+        private WidthModes widthMode;
 
         private InventoryMenu playerInventoryMenu;
         private ClickableTextureComponent quickStackButton;
@@ -147,8 +140,10 @@ namespace ChestStorageSystem.Menus
         private int aggroMenuRowCount;
         private bool invertShiftTransfering = false;
 
-        public AggregationMenu() : base(new List<Item>(), false, false, null, null, null)
+        public AggregationMenu(CSS css) : base(new List<Item>(), false, false, null, null, null)
         {
+            this.css = css;
+
             // Build the storage list
             List<StorageOrigin> storages = StorageOrigin.BuildStorageList();
 
@@ -170,6 +165,7 @@ namespace ChestStorageSystem.Menus
 
             // Width stepper
             this.aggroWidthStepper = new Stepper(Point.Zero, 3f);
+            this.widthMode = this.css.Config.WidthMode;
 
             // Build the aggregation of all storages
             this.aggro = new StorageAggregator(storages, this.categoryDropdown.SelectedItem?.Value, null);
@@ -199,25 +195,18 @@ namespace ChestStorageSystem.Menus
             };
             this.aggroWidthStepper.OnStepped += (sender, args) =>
             {
-                if (args.Direction > 0)
+                if (args.Direction > 0 && this.widthMode < WidthModes.Full)
                 {
-                    if (this.widthMode >= WidthModes.Full)
-                    {
-                        return;
-                    }
                     ++this.widthMode;
+                    this.RecalculateBounds();
                 }
-                else
+                else if (args.Direction < 0 && this.widthMode > WidthModes.Small)
                 {
-                    if (this.widthMode <= WidthModes.Small)
-                    {
-                        return;
-                    }
                     --this.widthMode;
+                    this.RecalculateBounds();
                 }
-
-                this.RecalculateBounds();
             };
+            this.exitFunction = this.OnExit;
         }
 
         public override void draw(SpriteBatch batch)
@@ -626,6 +615,23 @@ namespace ChestStorageSystem.Menus
             int numberOfItemRows = (int)Math.Ceiling((this.aggro.LastSlotIndexWithItem() + 1) / (float)this.aggroMenuColumnCount);
             int numberOfOverflowRows = Math.Max(0, numberOfItemRows - this.aggroMenuRowCount);
             this.scrollbar.Steps = numberOfOverflowRows;
+        }
+
+        public void OnExit()
+        {
+            Configuration config = this.css.Config;
+            bool saveConfig = false;
+
+            if (config.WidthMode != this.widthMode)
+            {
+                config.WidthMode = this.widthMode;
+                saveConfig = true;
+            }
+
+            if (saveConfig)
+            {
+                this.css.SaveConfig();
+            }
         }
 
         public void RecalculateBounds()
