@@ -204,7 +204,7 @@ namespace ChestStorageSystem.Menus
                     ++this.widthMode;
                     this.RecalculateBounds();
                 }
-                else if (args.Direction < 0 && this.widthMode > WidthModes.Small)
+                else if (args.Direction < 0 && this.widthMode > WidthModes.Regular)
                 {
                     --this.widthMode;
                     this.RecalculateBounds();
@@ -317,14 +317,13 @@ namespace ChestStorageSystem.Menus
                 // Draw the menu background
                 base.drawBackground(b);
             }
-            else
+            else if (this.css.Config.BackgroundEffects)
             {
                 bool isRaining = Game1.IsRainingHere();
                 // isSnowing
                 // isLightning
 
                 Rectangle viewportBounds = Game1.graphics.GraphicsDevice.Viewport.Bounds;
-
 
                 // Twilight
                 // Day & Raining
@@ -357,7 +356,10 @@ namespace ChestStorageSystem.Menus
                     // Stars overlay
                     b.Draw(Game1.mouseCursors, new Rectangle(viewportBounds.X, viewportBounds.Y, viewportBounds.Width, viewportBounds.Height / 2), StarsTextureCoords, Color.White * 0.5f);
                 }
-
+            }
+            else
+            {
+                b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
             }
         }
 

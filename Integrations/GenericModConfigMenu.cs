@@ -32,10 +32,37 @@ namespace ChestStorageSystem.Integrations
 
             // OpenUI keybind
             gmcm.AddKeybind(
-                css.ModManifest,
-                () => css.Config.OpenUIKey,
-                (key) => css.Config.OpenUIKey = key,
-                () => "Open UI Key"
+                mod: css.ModManifest,
+                name: () => "Open UI Key",
+                getValue: () => css.Config.OpenUIKey,
+                setValue: (key) => css.Config.OpenUIKey = key
+            );
+
+            // Aggro Window Width
+            Type TWidthModes = typeof(Configuration.WidthModes);
+            gmcm.AddTextOption(
+                mod: css.ModManifest,
+                name: () => "Prefered Width",
+                getValue: () => Enum.GetName(TWidthModes, css.Config.WidthMode),
+                setValue: (name) => css.Config.WidthMode = (Configuration.WidthModes)Enum.Parse(TWidthModes, name),
+                allowedValues: Enum.GetNames(TWidthModes)
+            );
+
+            // Invert Shift Behavior
+            gmcm.AddBoolOption(
+                mod: css.ModManifest,
+                name: () => "Click Item To Transfer",
+                getValue: () => css.Config.InvertShiftTransfer,
+                setValue: (invert) => css.Config.InvertShiftTransfer = invert
+            );
+
+            // BG FX
+            gmcm.AddBoolOption(
+                mod: css.ModManifest,
+                name: () => "Background FX",
+                getValue: () => css.Config.BackgroundEffects,
+                setValue: (enabled) => css.Config.BackgroundEffects = enabled,
+                tooltip: () => "Note: The \"Show Menu Background\" option overrides this."
             );
 
             IsRegistered = true;
