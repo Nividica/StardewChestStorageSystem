@@ -51,25 +51,25 @@ namespace ChestStorageSystem.Storage
 
             public Item GetItem()
             {
-                if (this.SlotIndex >= this.Chest.items.Count)
+                if (this.SlotIndex >= this.Chest.Items.Count)
                 {
                     return null;
                 }
 
-                return this.Chest.items[this.SlotIndex];
+                return this.Chest.Items[this.SlotIndex];
             }
 
             public void SetItem(Item item)
             {
                 // If the inventory has shrunk (e.g. via clearNulls()), add nulls up to this index
-                while (this.SlotIndex >= this.Chest.items.Count)
+                while (this.SlotIndex >= this.Chest.Items.Count)
                 {
-                    this.Chest.items.Add(null);
+                    this.Chest.Items.Add(null);
                 }
 
-                this.Chest.items[this.SlotIndex] = item;
+                this.Chest.Items[this.SlotIndex] = item;
 
-                ItemGrabMenu.organizeItemsInList(this.Chest.items);
+                ItemGrabMenu.organizeItemsInList(this.Chest.Items);
             }
 
             public int CompareTo(MappedSlot other)
@@ -134,7 +134,7 @@ namespace ChestStorageSystem.Storage
             if (itemToAdd is null || prevStackSize != itemToAdd.Stack)
             {
                 // Sort the inventory
-                ItemGrabMenu.organizeItemsInList(chest.items);
+                ItemGrabMenu.organizeItemsInList(chest.Items);
 
                 // If fully consumed, done, return null
                 if (itemToAdd is null)
@@ -424,7 +424,7 @@ namespace ChestStorageSystem.Storage
             // Search each inventory for a like-item
             foreach (StorageOrigin storage in this.filteredStorages)
             {
-                foreach (Item item in storage.Chest.items)
+                foreach (Item item in storage.Chest.Items)
                 {
                     if (CanStackWith(incomingItem, item, rules))
                     {
@@ -501,7 +501,7 @@ namespace ChestStorageSystem.Storage
                 this.filteredStorages.Add(storage);
 
                 // Get the capacity of the chest(including overflow)
-                int capacity = Math.Max(storage.Chest.GetActualCapacity(), storage.Chest.items.Count);
+                int capacity = Math.Max(storage.Chest.GetActualCapacity(), storage.Chest.Items.Count);
 
                 // Add each slot from the chest
                 for (int i = 0; i < capacity; ++i)

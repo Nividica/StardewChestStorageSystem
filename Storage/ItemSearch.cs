@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Netcode;
 using static ChestStorageSystem.Storage.ItemSearch;
-
+using StardewValley.GameData.Objects;
 
 namespace ChestStorageSystem.Storage
 {
@@ -24,10 +24,7 @@ namespace ChestStorageSystem.Storage
         }
 
         private const int StardewMagicNumber_Inedible = -300;
-        private const int ItemInfoBuffsField = 7;
         private const string AssetStringItemHoverBuff = "Strings\\UI:ItemHover_Buff";
-
-        private static readonly Dictionary<int, string[]> FoodBuffCache = new();
 
         /// <summary>
         /// Returns the source if no search should be performed.
@@ -209,72 +206,46 @@ namespace ChestStorageSystem.Storage
                 return false;
             };
 
-            // Is there any info for this item?
-            string[] buffPowers = GetBaselineFoodBuffPowers(itemObject.ParentSheetIndex);
-            if (buffPowers is null)
+            try
+            {
+
+                IEnumerable<Buff> buffs = item.GetFoodOrDrinkBuffs();
+
+                return buffs.Any((buff) =>
+                {
+                    if (!buff.HasAnyEffects())
+                    {
+                        return false;
+                    }
+
+                    string[] buffPowers = buff.effects.ToLegacyAttributeFormat();
+
+                    // Search every buff power > 0
+                    for (int buffId = 0; buffId < buffPowers.Length; buffId++)
+                    {
+                        string power = buffPowers[buffId];
+                        if (power == "0") continue;
+
+                        string buffDescription = Game1.content.LoadString($"{AssetStringItemHoverBuff}{buffId}");
+                        if (string.IsNullOrEmpty(buffDescription))
+                        {
+                            continue;
+                        }
+                        if (buffDescription.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+            }
+            catch
             {
                 return false;
             }
 
-            // Get any item-specific buffs
-            buffPowers = itemObject.ModifyItemBuffs(buffPowers);
 
-            // Search every buff power > 0
-            for (int buffId = 0; buffId < buffPowers.Length; buffId++)
-            {
-                string power = buffPowers[buffId];
-                if (power == "0") continue;
-
-                string buffDescription = Game1.content.LoadString($"{AssetStringItemHoverBuff}{buffId}");
-                if (string.IsNullOrEmpty(buffDescription))
-                {
-                    continue;
-                }
-                if (buffDescription.Contains(term, StringComparison.CurrentCultureIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Returns the array of buff powers for the item
-        /// </summary>
-        /// <param name="parentSheetIndex"></param>
-        /// <returns></returns>
-        private static string[] GetBaselineFoodBuffPowers(int parentSheetIndex)
-        {
-            string[] buffPowers = null;
-
-            // Are the buffs not yet cached?
-            if (FoodBuffCache.ContainsKey(parentSheetIndex))
-            {
-                //CSS.Log($"Cache Hit");
-                buffPowers = FoodBuffCache[parentSheetIndex];
-            }
-            else
-            {
-                // Ask for any information about the item
-                Game1.objectInformation.TryGetValue(parentSheetIndex, out string itemInfo);
-                if (!string.IsNullOrEmpty(itemInfo))
-                {
-                    // Does the item have baseline buff powers?
-                    string[] infoFields = itemInfo.Split('/');
-                    if (infoFields.Length > ItemInfoBuffsField)
-                    {
-                        // Powers are provided as a space delimited string of ints
-                        buffPowers = infoFields[ItemInfoBuffsField].Split(' ');
-                    }
-                }
-
-                // Store the buffs(or null) in the cache
-                FoodBuffCache.Add(parentSheetIndex, buffPowers);
-            }
-
-            // Return a new array in-case the item mutates it during ModifyItemBuffs()
-            return buffPowers is not null ? (string[])buffPowers.Clone() : null;
         }
 
         private static bool MatchQuality(Item item, string term)

@@ -640,9 +640,9 @@ namespace ChestStorageSystem.Menus
             this.aggro.ApplyTextSearch(this.searchTextbox.Text);
 
             // Determine the time of day
-            this.timeOfDay = Game1.isStartingToGetDarkOut()
+            this.timeOfDay = Game1.isStartingToGetDarkOut(Game1.player.currentLocation)
             ? TimeOfDay.Sunset
-            : Game1.isDarkOut()
+            : Game1.isDarkOut(Game1.player.currentLocation)
             ? TimeOfDay.Night
             : TimeOfDay.Day;
 

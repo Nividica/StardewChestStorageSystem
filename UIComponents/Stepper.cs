@@ -79,7 +79,7 @@ namespace ChestStorageSystem.UIComponents
             {
                 this.OnStepped(this, new OnSteppedArgs(-1));
 
-                Game1.playSoundPitched("drumkit6", 1100);
+                Game1.playSound("drumkit6", 1100);
 
                 return true;
             }
@@ -88,7 +88,7 @@ namespace ChestStorageSystem.UIComponents
             {
                 this.OnStepped(this, new OnSteppedArgs(1));
 
-                Game1.playSoundPitched("drumkit6", 1300);
+                Game1.playSound("drumkit6", 1300);
 
                 return true;
             }

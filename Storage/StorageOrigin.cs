@@ -29,18 +29,16 @@ namespace ChestStorageSystem.Storage
 
                 yield return location;
 
-                if (location is BuildableGameLocation buildLocation)
+                foreach (Building building in location.buildings)
                 {
-                    foreach (Building building in buildLocation.buildings)
+                    if (building is null || building.indoors.Value is null)
                     {
-                        if (building is null || building.indoors.Value is null)
-                        {
-                            continue;
-                        }
-
-                        yield return building.indoors.Value;
+                        continue;
                     }
+
+                    yield return building.indoors.Value;
                 }
+
             }
         }
 
